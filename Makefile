@@ -405,6 +405,7 @@ LIB_H += unpack-trees.h
 LIB_H += userdiff.h
 LIB_H += utf8.h
 LIB_H += wt-status.h
+LIB_H += gidit.h
 
 LIB_OBJS += abspath.o
 LIB_OBJS += alias.o
@@ -509,6 +510,7 @@ LIB_OBJS += write_or_die.o
 LIB_OBJS += ws.o
 LIB_OBJS += wt-status.o
 LIB_OBJS += xdiff-interface.o
+LIB_OBJS += gidit.o
 
 BUILTIN_OBJS += builtin-add.o
 BUILTIN_OBJS += builtin-annotate.o
@@ -587,6 +589,7 @@ BUILTIN_OBJS += builtin-upload-archive.o
 BUILTIN_OBJS += builtin-verify-pack.o
 BUILTIN_OBJS += builtin-verify-tag.o
 BUILTIN_OBJS += builtin-write-tree.o
+BUILTIN_OBJS += builtin-gidit.o
 
 GITLIBS = $(LIB_FILE) $(XDIFF_LIB)
 EXTLIBS =

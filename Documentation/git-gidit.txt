@@ -1,0 +1,55 @@
+git-gidit(1)
+===========
+
+NAME
+----
+git-gidit - Support functions for gidit transport
+
+
+SYNOPSIS
+--------
+[verse]
+'git push' [--tags] --pushobj
+
+DESCRIPTION
+-----------
+
+Currently only creates a pushobj file.
+
+
+OPTIONS
+-------
+--pushobj::
+	Generate pushobj and print to STDOUT
+
+--tags::
+	Include all tags
+
+OUTPUT
+------
+
+Output depends on flags, currently there is only the `pushobj` flag. Which
+spits out a simple list of refs (excluding remotes) and their corresponding 
+SHA1 hashes.
+
+Examples
+--------
+
+git gidit --pushobj::
+	Spit out PushObj to stdout, excluding tags
+
+git gidit --pushobj --tags::
+	Spit out PushObj to stdout, including tags
+
+
+Author
+------
+Written by Ziling Zhao <zilingzhao@gmail.com>
+
+Documentation
+--------------
+Documentation by Ziling Zhao
+
+GIT
+---
+Part of the linkgit:git[1] suite
