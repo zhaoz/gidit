@@ -27,7 +27,8 @@ static int handle_one_ref(const char *path, const unsigned char *sha1,
 
 	// ignore tags and remotes
 	if ((is_tag_ref && !(cb->flags & INCLUDE_TAGS)) 
-			|| !prefixcmp(path, "refs/remotes/"))
+			|| !prefixcmp(path, "refs/remotes/")
+			|| !prefixcmp(path, "refs/stash"))
 		return 0;
 
 	fprintf(cb->refs_file, "%s %s\n", sha1_to_hex(sha1), path);
