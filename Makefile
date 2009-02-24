@@ -879,6 +879,7 @@ EXTLIBS += -lz
 
 ifndef NO_POSIX_ONLY_PROGRAMS
 	PROGRAMS += git-daemon$X
+	PROGRAMS += git-gidit-daemon$X
 	PROGRAMS += git-imap-send$X
 endif
 ifndef NO_OPENSSL
