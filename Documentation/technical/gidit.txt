@@ -38,9 +38,11 @@ would be stored in files stored in folders by their PGP keys.
 
 The file structure would be:
 
-./pushobjects/[PGP Key]/ProjectName.plist
+./pushobjects/[SHA1 of PGP Key]/ProjectName/[#]_[SHA1]
 
-The ProjectName file would hold the PushObjects in sorted order.
+The ProjectName folder would hold the PushObjects. The '#' keeps the 
+push objects in sorted order. The PushObject's SHA1 would be appended
+after the '_'.
 
 
 Bundles would be stored similar to how git stores objects. A folder 
