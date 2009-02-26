@@ -156,3 +156,21 @@ int gidit_init(const char *path)
 	return 0;
 }
 
+int update_pl(FILE *fp, const char * base_dir, unsigned int flags)
+{
+	// read from fp, and save 
+	struct strbuf m = STRBUF_INIT;
+
+	while (strbuf_getline(&m, fp, '\n') != EOF) {
+		printf("%s", m.buf);
+		//unsigned char sha1[20];
+		//if (get_sha1_hex(m.buf, sha1) < 0)
+			//die("Corrupt MERGE_HEAD file (%s)", m.buf);
+		//pptr = &commit_list_insert(lookup_commit(sha1), pptr)->next;
+	}
+
+	fclose(fp);
+	strbuf_release(&m);
+
+	return 0;
+}

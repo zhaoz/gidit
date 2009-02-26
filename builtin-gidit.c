@@ -48,6 +48,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 					"use another key to sign the tag"),
 		OPT_BOOLEAN( 0 , "pushobj", &pushobj, "generate push object"),
 		OPT_BOOLEAN( 0 , "init", &init, "init gidit directory"),
+		OPT_BOOLEAN( 0 , "updatepl", &updatepl, "Update push list"),
 		OPT_STRING('b', NULL, &base_dir, "base_dir", "base_dir for daemon"),
 		OPT_END()
 	};
