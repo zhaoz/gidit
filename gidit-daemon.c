@@ -1,7 +1,7 @@
 #include "cache.h"
 #include "pkt-line.h"
 #include "exec_cmd.h"
-#include "chimera/include/chimera.h"
+#include "chimera.h"
 
 #include <syslog.h>
 
@@ -914,6 +914,23 @@ static void store_pid(const char *path)
 		die("failed to write pid file %s: %s", path, strerror(errno));
 }
 
+static void gidit_init(char * bootstrap, int port){
+	//Initialize Chimera nonsense
+	//For testing purposes, the src and destination
+	//will litsen on the same port
+	ChimeraState * state = chimera_init(port);
+	ChimeraHost * host = host_get(state, bootstrap, port);
+
+	/*    Place upcalls here
+	chimera_forward (state, test_fwd);
+        chimera_deliver (state, test_del);
+        chimera_update (state, test_update);
+        chimera_setkey (state, keyinput);
+        chimera_register (state, TEST_CHAT, 1);
+	*/
+	chimera_join(state,host);
+}
+
 static int serve(char *listen_addr, int listen_port, struct passwd *pass, gid_t gid)
 {
 	int socknum, *socklist;
@@ -1138,19 +1155,3 @@ int main(int argc, char **argv)
 	return serve(listen_addr, listen_port, pass, gid);
 }
 
-static void gidit_init(char * bootstrap, int port){
-	//Initialize Chimera nonsense
-	//For testing purposes, the src and destination
-	//will litsen on the same port
-	ChimeraState state = chimera_init(port);
-	ChimeraHost * host = get_host(state, bootstrap, port);
-
-	/*    Place upcalls here
-	chimera_forward (state, test_fwd);
-        chimera_deliver (state, test_del);
-        chimera_update (state, test_update);
-        chimera_setkey (state, keyinput);
-        chimera_register (state, TEST_CHAT, 1);
-	*/
-	chimera_join(state,host);	ChimeraState state = chimera_init(port);
-}

@@ -200,6 +200,7 @@ gitexecdir = libexec/git-core
 sharedir = $(prefix)/share
 template_dir = share/git-core/templates
 htmldir = share/doc/git-doc
+chimeradir = chimera/
 ifeq ($(prefix),/usr)
 sysconfdir = /etc
 ETC_GITCONFIG = $(sysconfdir)/gitconfig
@@ -879,8 +880,10 @@ EXTLIBS += -lz
 
 ifndef NO_POSIX_ONLY_PROGRAMS
 	PROGRAMS += git-daemon$X
-	PROGRAMS += git-gidit-daemon$X
 	PROGRAMS += git-imap-send$X
+
+	PROGRAMS += git-gidit-daemon$X
+	BASIC_CFLAGS += -I$(chimeradir)/include
 endif
 ifndef NO_OPENSSL
 	OPENSSL_LIBSSL = -lssl
@@ -1265,6 +1268,15 @@ git.o git.spec \
 	$(patsubst %.sh,%,$(SCRIPT_SH)) \
 	$(patsubst %.perl,%,$(SCRIPT_PERL)) \
 	: GIT-VERSION-FILE
+
+libchimera:
+	git submodule init chimera && \
+	git submodule update && \
+	cd chimera && mkdir -p build && cd build && \
+	cmake .. && make
+
+git-gidit-daemon$X: gidit-daemon.o $(GITLIBS) 
+	$(QUIET_LINK)$(CC) $(ALL_CFLAGS) -o $@ $(ALL_LDFLAGS) $(filter gidit-daemon.o,$^) $(LIBS) $(chimeradir)/build/out/lib/libchimera.a
 
 %.o: %.c GIT-CFLAGS
 	$(QUIET_CC)$(CC) -o $*.o -c $(ALL_CFLAGS) $<
