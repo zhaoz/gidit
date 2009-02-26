@@ -1,6 +1,7 @@
 #include "cache.h"
 #include "pkt-line.h"
 #include "exec_cmd.h"
+#include "chimera/include/chimera.h"
 
 #include <syslog.h>
 
@@ -12,12 +13,17 @@
 #define NI_MAXSERV 32
 #endif
 
+#ifndef CHIMERA_PORT
+#define CHIMERA_PORT 2323
+#endif
+
+
 static int log_syslog;
 static int verbose;
 static int reuseaddr;
 
 static const char daemon_usage[] =
-"git daemon [--verbose] [--syslog] [--export-all]\n"
+"git-gidit-daemon [bootstrap=b] [--verbose] [--syslog] [--export-all]\n"
 "           [--timeout=n] [--init-timeout=n] [--max-connections=n]\n"
 "           [--strict-paths] [--base-path=path] [--base-path-relaxed]\n"
 "           [--user-path | --user-path=path]\n"
@@ -946,6 +952,11 @@ int main(int argc, char **argv)
 			listen_addr = xstrdup_tolower(arg + 9);
 			continue;
 		}
+
+		if(!prefixcmp(arg, "--bootstrap")){
+			gidit_init(arg+11,CHIMERA_PORT);
+		}
+
 		if (!prefixcmp(arg, "--port=")) {
 			char *end;
 			unsigned long n;
@@ -1125,4 +1136,21 @@ int main(int argc, char **argv)
 		store_pid(pid_file);
 
 	return serve(listen_addr, listen_port, pass, gid);
+}
+
+static void gidit_init(char * bootstrap, int port){
+	//Initialize Chimera nonsense
+	//For testing purposes, the src and destination
+	//will litsen on the same port
+	ChimeraState state = chimera_init(port);
+	ChimeraHost * host = get_host(state, bootstrap, port);
+
+	/*    Place upcalls here
+	chimera_forward (state, test_fwd);
+        chimera_deliver (state, test_del);
+        chimera_update (state, test_update);
+        chimera_setkey (state, keyinput);
+        chimera_register (state, TEST_CHAT, 1);
+	*/
+	chimera_join(state,host);	ChimeraState state = chimera_init(port);
 }
