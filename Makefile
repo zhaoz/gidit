@@ -407,6 +407,7 @@ LIB_H += userdiff.h
 LIB_H += utf8.h
 LIB_H += wt-status.h
 LIB_H += gidit.h
+LIB_H += pgp.h
 
 LIB_OBJS += abspath.o
 LIB_OBJS += alias.o
@@ -511,6 +512,7 @@ LIB_OBJS += write_or_die.o
 LIB_OBJS += ws.o
 LIB_OBJS += wt-status.o
 LIB_OBJS += xdiff-interface.o
+LIB_OBJS += pgp.o
 LIB_OBJS += gidit.o
 
 BUILTIN_OBJS += builtin-add.o

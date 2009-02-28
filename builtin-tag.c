@@ -12,6 +12,7 @@
 #include "tag.h"
 #include "run-command.h"
 #include "parse-options.h"
+#include "pgp.h"
 
 static const char * const git_tag_usage[] = {
 	"git tag [-a|-s|-u <key-id>] [-f] [-m <msg>|-F <file>] <tagname> [<head>]",
@@ -21,15 +22,11 @@ static const char * const git_tag_usage[] = {
 	NULL
 };
 
-static char signingkey[1000];
-
 struct tag_filter {
 	const char *pattern;
 	int lines;
 	struct commit_list *with_commit;
 };
-
-#define PGP_SIGNATURE "-----BEGIN PGP SIGNATURE-----"
 
 static int show_reference(const char *refname, const unsigned char *sha1,
 			  int flag, void *cb_data)
@@ -219,12 +216,6 @@ static const char tag_template[] =
 	"#\n"
 	"# Write a tag message\n"
 	"#\n";
-
-static void set_signingkey(const char *value)
-{
-	if (strlcpy(signingkey, value, sizeof(signingkey)) >= sizeof(signingkey))
-		die("signing key value too long (%.10s...)", value);
-}
 
 static int git_tag_config(const char *var, const char *value, void *cb)
 {
