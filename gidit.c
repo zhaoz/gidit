@@ -10,7 +10,8 @@
 #include "gidit.h"
 
 struct gidit_refs_cb_data {
-	FILE *refs_file;
+	// FILE *refs_file;
+	struct strbuf *buf;
 	unsigned int flags;
 };
 
@@ -31,28 +32,88 @@ static int handle_one_ref(const char *path, const unsigned char *sha1,
 			|| !prefixcmp(path, "refs/stash"))
 		return 0;
 
-	fprintf(cb->refs_file, "%s %s\n", sha1_to_hex(sha1), path);
+	// fprintf(cb->refs_file, "%s %s\n", sha1_to_hex(sha1), path);
+	strbuf_addstr(cb->buf, sha1_to_hex(sha1));
+	strbuf_addstr(cb->buf, " ");
+	strbuf_addstr(cb->buf, path);
+	strbuf_addstr(cb->buf, "\n");
 
 	return 0;
 }
 
-int gen_pushobj(FILE *fp, unsigned int flags)
-{
-	// struct commit *rev, *head_rev = head_rev;
-	const char *head;
-	unsigned char head_sha1[20];
-	struct gidit_refs_cb_data cbdata;
+static int do_sign(struct strbuf *buffer, char * signingkey) {
+	struct child_process gpg;
+	const char *args[4];
+	int len;
+	int i, j;
 
-	cbdata.refs_file = fp;
+	/* When the username signingkey is bad, program could be terminated
+	 * because gpg exits without reading and then write gets SIGPIPE. */
+	signal(SIGPIPE, SIG_IGN);
+
+	memset(&gpg, 0, sizeof(gpg));
+	gpg.argv = args;
+	gpg.in = -1;
+	gpg.out = -1;
+	args[0] = "gpg";
+	args[1] = "-bsau";
+	args[2] = signingkey;
+	args[3] = NULL;
+
+	if (start_command(&gpg))
+		return error("could not run gpg.");
+
+	if (write_in_full(gpg.in, buffer->buf, buffer->len) != buffer->len) {
+		close(gpg.in);
+		close(gpg.out);
+		finish_command(&gpg);
+		return error("gpg did not accept the tag data");
+	}
+	close(gpg.in);
+	len = strbuf_read(buffer, gpg.out, 1024);
+	close(gpg.out);
+
+	if (finish_command(&gpg) || !len || len < 0)
+		return error("gpg failed to sign the tag");
+
+	/* Strip CR from the line endings, in case we are on Windows. */
+	for (i = j = 0; i < buffer->len; i++)
+		if (buffer->buf[i] != '\r') {
+			if (i != j)
+				buffer->buf[j] = buffer->buf[i];
+			j++;
+		}
+	strbuf_setlen(buffer, j);
+
+	return 0;
+}
+
+int gen_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags)
+{
+	const char *head;
+	unsigned char head_sha1[21];
+	struct gidit_refs_cb_data cbdata;
+	struct strbuf buf = STRBUF_INIT;
+
+	// cbdata.refs_file = fp;
+	cbdata.buf = &buf;
 	cbdata.flags = flags;
 
 	head = resolve_ref("HEAD", head_sha1, 0, NULL);
+	head_sha1[20] = '\0';
 	if (!head)
 		die("Failed to resolve HEAD as a valid ref.");
-
-	fprintf(fp, "%s HEAD\n", sha1_to_hex(head_sha1));
+	
+	strbuf_add(&buf, sha1_to_hex(head_sha1), 40);
+	strbuf_addstr(&buf, " HEAD\n");
 
 	for_each_ref(handle_one_ref, &cbdata);
 
+	if (sign)
+		do_sign(&buf, signingkey);
+
+	fprintf(fp, "%s", buf.buf);
+
+	strbuf_release(&buf);
 	return 0;
 }
