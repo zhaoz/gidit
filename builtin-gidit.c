@@ -35,8 +35,8 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 	int flags = 0;
 	int tags = 0, init = 0, pushobj = 0, sign = 0;
 
-	const char *base_dir;
-	const char *keyid;
+	const char *basepath = NULL;
+	const char *keyid = NULL;
 
 	int rc;
 
@@ -59,7 +59,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 	if (keyid) {
 		sign = 1;
 		set_signingkey(keyid);
-	} else {
+	} else if (sign) {
 		if (strlcpy(signingkey, git_committer_info(IDENT_ERROR_ON_NO_NAME),
 				sizeof(signingkey)) > sizeof(signingkey) - 1)
 			return error("committer info too long.");
