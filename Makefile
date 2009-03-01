@@ -200,7 +200,7 @@ gitexecdir = libexec/git-core
 sharedir = $(prefix)/share
 template_dir = share/git-core/templates
 htmldir = share/doc/git-doc
-chimeradir = chimera/
+chimeradir = chimera
 ifeq ($(prefix),/usr)
 sysconfdir = /etc
 ETC_GITCONFIG = $(sysconfdir)/gitconfig
