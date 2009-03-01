@@ -14,6 +14,7 @@
 
 static const char * const gidit_usage[] = {
 	"git gidit [-s|-u <key-id>] [[[--tags] --pushobj] | [-b <base_dir> --updatepl]]",
+	"git gidit -b <base_dir> --init",
 	NULL,
 };
 
@@ -32,7 +33,7 @@ static int git_gidit_config(const char *var, const char *value, void *cb)
 int cmd_gidit(int argc, const char **argv, const char *prefix)
 {
 	int flags = 0;
-	int tags = 0, pushobj = 0, updatepo = 0, sign = 0;
+	int tags = 0, init = 0, pushobj = 0, sign = 0;
 
 	const char *base_dir;
 	const char *keyid;
@@ -46,7 +47,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		OPT_STRING('u', NULL, &keyid, "key-id",
 					"use another key to sign the tag"),
 		OPT_BOOLEAN( 0 , "pushobj", &pushobj, "generate push object"),
-		OPT_BOOLEAN( 0 , "updatepl", &updatepo, "Update push list"),
+		OPT_BOOLEAN( 0 , "init", &init, "init gidit directory"),
 		OPT_STRING('b', NULL, &base_dir, "base_dir", "base_dir for daemon"),
 		OPT_END()
 	};
@@ -72,7 +73,13 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 
 	if (pushobj) 
 		rc = gen_pushobj(stdout, signingkey, sign, flags);
-	else
+	else if (init) {
+		if (!base_dir) {
+			fprintf(stderr, "Need to give a base_dir to init\n");
+			exit(1);
+		}
+		rc = gidit_init(base_dir);
+	} else
 		rc = -1;
 
 	if (rc == -1)

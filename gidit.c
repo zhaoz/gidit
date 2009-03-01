@@ -6,6 +6,7 @@
 #include "run-command.h"
 #include "builtin.h"
 #include "remote.h"
+#include "strbuf.h"
 #include "transport.h"
 #include "gidit.h"
 
@@ -95,7 +96,6 @@ int gen_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags)
 	struct gidit_refs_cb_data cbdata;
 	struct strbuf buf = STRBUF_INIT;
 
-	// cbdata.refs_file = fp;
 	cbdata.buf = &buf;
 	cbdata.flags = flags;
 
@@ -117,3 +117,42 @@ int gen_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags)
 	strbuf_release(&buf);
 	return 0;
 }
+
+static void safe_create_dir(const char *dir)
+{
+	if (mkdir(dir, 0777) < 0) {
+		if (errno != EEXIST) {
+			perror(dir);
+			exit(1);
+		} 
+
+		if (access(dir, W_OK)) {
+			fprintf(stderr, "Unable to write to %s\n", dir);
+			exit(1);
+		}
+	}
+}
+
+static void create_rel_dir(const char *base, const char *rel)
+{
+	char *full_path;
+	full_path = (char*)malloc(strlen(base) + strlen(rel) + 2);
+	sprintf(full_path, "%s/%s", base, rel);
+	safe_create_dir(full_path);
+	free(full_path);
+}
+
+/**
+ * initialize a given directory
+ */
+int gidit_init(const char *path)
+{
+	safe_create_dir(path);
+
+	// create these dirs if they don't exist
+	create_rel_dir(path, BUNDLES_DIR);
+	create_rel_dir(path, PUSHOBJ_DIR);
+
+	return 0;
+}
+
