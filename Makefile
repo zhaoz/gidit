@@ -1277,7 +1277,7 @@ libchimera:
 	cd chimera && mkdir -p build && cd build && \
 	cmake .. && make
 
-git-gidit-daemon$X: gidit-daemon.o $(GITLIBS) 
+git-gidit-daemon$X: gidit-daemon.o libchimera $(GITLIBS) 
 	$(QUIET_LINK)$(CC) $(ALL_CFLAGS) -o $@ $(ALL_LDFLAGS) $(filter gidit-daemon.o,$^) $(LIBS) $(chimeradir)/build/out/lib/libchimera.a
 
 %.o: %.c GIT-CFLAGS
