@@ -17,6 +17,6 @@ int gidit_init(const char *path);
 /**
  * Read pushobj from fp and save, will need to take
  */
-int update_pl(FILE *fp, const char * base_dir, unsigned int flags);
+int update_pl(FILE *fp, const char * basepath, unsigned int flags);
 
 #endif		// GIDIT_H

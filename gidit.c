@@ -158,19 +158,24 @@ int gidit_init(const char *path)
 
 int update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 {
-	// read from fp, and save 
-	struct strbuf m = STRBUF_INIT;
+	struct strbuf pobj_dir = STRBUF_INIT;
 
-	while (strbuf_getline(&m, fp, '\n') != EOF) {
-		printf("%s", m.buf);
-		//unsigned char sha1[20];
-		//if (get_sha1_hex(m.buf, sha1) < 0)
-			//die("Corrupt MERGE_HEAD file (%s)", m.buf);
-		//pptr = &commit_list_insert(lookup_commit(sha1), pptr)->next;
+	strbuf_addstr(&pobj_dir, "/");
+	strbuf_addstr(&pobj_dir, PUSHOBJ_DIR);
+
+	if (access(pobj_dir.buf, W_OK) != 0) {
+		fprintf(stderr, "pushbobjects dir was not writable\n");
+		exit(1);
 	}
 
+	// hash the pgpkey
+
+	// ensure that the directory exists
+
+
+	strbuf_release(&pobj_dir);
+
 	fclose(fp);
-	strbuf_release(&m);
 
 	return 0;
 }

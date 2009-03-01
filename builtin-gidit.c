@@ -13,8 +13,9 @@
 #include "gidit.h"
 
 static const char * const gidit_usage[] = {
-	"git gidit [-s|-u <key-id>] [[[--tags] --pushobj] | [-b <base_dir> --updatepl]]",
+	"git gidit [-s|-u <key-id>] [--tags] --pushobj",
 	"git gidit -b <base_dir> --init",
+	"git gidit -b <base-path> --updatepl",
 	NULL,
 };
 
@@ -33,7 +34,7 @@ static int git_gidit_config(const char *var, const char *value, void *cb)
 int cmd_gidit(int argc, const char **argv, const char *prefix)
 {
 	int flags = 0;
-	int tags = 0, init = 0, pushobj = 0, sign = 0;
+	int tags = 0, init = 0, verbose = 0, pushobj = 0, updatepl = 0, sign = 0;
 
 	const char *basepath = NULL;
 	const char *keyid = NULL;
@@ -41,15 +42,17 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 	int rc;
 
 	struct option options[] = {
-		OPT_BIT('v', "verbose", &flags, "be verbose", TRANSPORT_PUSH_VERBOSE),
+		OPT__VERBOSE(&verbose),
+		OPT_GROUP(""),
 		OPT_BOOLEAN( 0 , "tags", &tags, "include tags"),
 		OPT_BOOLEAN('s', NULL, &sign, "annotated and GPG-signed tag"),
 		OPT_STRING('u', NULL, &keyid, "key-id",
 					"use another key to sign the tag"),
 		OPT_BOOLEAN( 0 , "pushobj", &pushobj, "generate push object"),
 		OPT_BOOLEAN( 0 , "init", &init, "init gidit directory"),
+		OPT_GROUP(""),
 		OPT_BOOLEAN( 0 , "updatepl", &updatepl, "Update push list"),
-		OPT_STRING('b', NULL, &base_dir, "base_dir", "base_dir for daemon"),
+		OPT_STRING('b', NULL, &basepath, "base-path", "base-path for daemon"),
 		OPT_END()
 	};
 
@@ -75,11 +78,21 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 	if (pushobj) 
 		rc = gen_pushobj(stdout, signingkey, sign, flags);
 	else if (init) {
-		if (!base_dir) {
-			fprintf(stderr, "Need to give a base_dir to init\n");
+		if (!basepath) {
+			fprintf(stderr, "Need to give a basepath to init\n");
 			exit(1);
 		}
-		rc = gidit_init(base_dir);
+		rc = gidit_init(basepath);
+	} else if (updatepl) {
+		if (!basepath)
+			return error("Need base dir with updatepl.");
+		if (*basepath != '/') {
+			/* Allow only absolute */
+			fprintf(stderr, "'%s': Non-absolute path denied (base-path active)",
+				basepath);
+			return -1;
+		}
+		rc = update_pl(stdout, basepath, flags);
 	} else
 		rc = -1;
 
