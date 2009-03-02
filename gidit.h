@@ -12,6 +12,10 @@
  */
 int gen_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags);
 
+/**
+ * Initialize a gidit directory, that means creating the PUSHOBJ_DIR and 
+ * BUNDLES_DIR
+ */
 int gidit_init(const char *path);
 
 /**
