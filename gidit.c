@@ -13,7 +13,6 @@
 
 struct projdir {
 	char * basedir;
-	ssize_t pgp_size;
 	unsigned char * pgp;
 	unsigned char pgp_sha1[20];
 	char * userdir;
@@ -177,20 +176,22 @@ static void pushobjects_dir(char ** str, const char * base_dir)
 static void free_projdir(struct projdir* pd)
 {
 	free(pd->basedir);
-	free(pd->pgp);
+
+	if (pd->pgp)
+		free(pd->pgp);
+
 	free(pd->userdir);
 	free(pd->projdir);
 	free(pd);
 }
 
-static struct projdir* init_projdir(const char * basedir, ssize_t pgp_size, 
-		const unsigned char * pgp, const char * projname)
+static struct projdir* get_projdir(const char * basedir, const char * sha1_hex, 
+		const char * projname)
 {
 	ssize_t bd_size;
 	struct projdir * pd = NULL;
 	char * head = NULL;
 	FILE * head_fp;
-	git_SHA_CTX c;
 
 	pd = (struct projdir*)malloc(sizeof(struct projdir));
 	bd_size = strlen(basedir) + 1; 
@@ -198,20 +199,13 @@ static struct projdir* init_projdir(const char * basedir, ssize_t pgp_size,
 	pd->basedir = (char*)malloc(bd_size);
 	memcpy(pd->basedir, basedir, bd_size);
 
-	pd->pgp_size = pgp_size;
-	pd->pgp = (unsigned char *)malloc(pgp_size);
-	memcpy(pd->pgp, pgp, pgp_size);
-
-	git_SHA1_Init(&c);
-	git_SHA1_Update(&c, pgp, pgp_size);
-	git_SHA1_Final(pd->pgp_sha1, &c);
+	// convert given sha1_hex, to binary sha1
+	get_sha1_hex(sha1_hex, pd->pgp_sha1);
 
 	// ensure dir existence
-	
 	pd->userdir = (char*)malloc(strlen(basedir) + 1 + strlen(PUSHOBJ_DIR) + 1
 								+ 40 + 1);
-	sprintf(pd->userdir, "%s/%s/%s", basedir, PUSHOBJ_DIR, 
-			sha1_to_hex(pd->pgp_sha1));
+	sprintf(pd->userdir, "%s/%s/%s", basedir, PUSHOBJ_DIR, sha1_hex);
 	safe_create_dir(pd->userdir);
 
 	pd->projdir = (char*)malloc(strlen(pd->userdir) + strlen(projname) + 1);
@@ -311,32 +305,20 @@ static void append_pushobj(struct projdir * pd, struct strbuf * pobj,
 int update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 {
 	struct projdir * pd;
-	char pgp_size_raw[5];
-	int ch = 0, ii = 0, pgp_size = 0;
+	char pgp_sha1[41];
+	int ch = 0;
 	unsigned char *pgp_key = NULL;
 	struct strbuf proj_name = STRBUF_INIT;
 	struct strbuf buf = STRBUF_INIT;
 	struct strbuf pobj = STRBUF_INIT;
 
-	// read size info in, first 4 bytes
-	for (ii = 0; ii < 4; ++ii) {
-		ch = fgetc(fp);
-		if (ch == EOF) {
-			fprintf(stderr, "error while reading size header\n");
-			exit(1);
-		}
-		pgp_size_raw[ii] = ch;
-	}
-	pgp_size_raw[4] = '\0';
-	pgp_size = strtol(pgp_size_raw, (char**)NULL, 16);
-
-	pgp_key = (unsigned char*)malloc(pgp_size);
-
-	// hash the pgpkey
-	if (fread(pgp_key, pgp_size, 1, fp) != 1) {
+	if (fread(pgp_sha1, 40, 1, fp) != 1) {
 		fprintf(stderr, "pgpkey error: bad pushobject format\n");
 		exit(1);
 	}
+	pgp_sha1[40] = '\0';
+
+	fprintf(stderr, "pgp: %s\n", pgp_sha1);
 
 	// next line is the project name
 	if (strbuf_getline(&proj_name, fp, '\n') == EOF) {
@@ -344,7 +326,7 @@ int update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 		exit(1);
 	}
 
-	pd = init_projdir(base_dir, pgp_size, pgp_key, proj_name.buf);
+	pd = get_projdir(base_dir, pgp_sha1, proj_name.buf);
 
 	while (strbuf_getline(&buf, fp, '\n') != EOF) {
 		if (strncmp(buf.buf, PGP_SIGNATURE, strlen(PGP_SIGNATURE)) == 0) {

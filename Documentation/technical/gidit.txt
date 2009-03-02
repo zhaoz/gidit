@@ -85,10 +85,10 @@ Client->Daemon PushObjects
 --------------------------
 
 PushObjects when sent off from client to daemon are in this form:
-[size of pgpkey][pgpkey][projname]\n[pushobject]
+[sha1 of pgpkey][projname]\n[pushobject]
 
 The PushObject looks like the section between "BEGIN PUSH OBJECT" and
 "BEGIN PGP SIGNATURE" from the PushObject example.
 
-The [size of pgpkey] is 4 bytes ascii hex. The [pgpkey] is the binary
-output of your pgpkey, equivalent to `gpg --export [id]`.
+The [sha1 of pgpkey] is the binary output of your pgpkey sha1'd,
+equivalent to `gpg --export [id] | sha1sum`.
