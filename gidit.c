@@ -133,7 +133,7 @@ static void safe_create_dir(const char *dir)
 	}
 }
 
-static void create_rel_dir(const char *base, const char *rel)
+static void safe_create_rel_dir(const char *base, const char *rel)
 {
 	char *full_path;
 	full_path = (char*)malloc(strlen(base) + strlen(rel) + 2);
@@ -150,30 +150,97 @@ int gidit_init(const char *path)
 	safe_create_dir(path);
 
 	// create these dirs if they don't exist
-	create_rel_dir(path, BUNDLES_DIR);
-	create_rel_dir(path, PUSHOBJ_DIR);
+	safe_create_rel_dir(path, BUNDLES_DIR);
+	safe_create_rel_dir(path, PUSHOBJ_DIR);
 
 	return 0;
 }
 
+static void pushobjects_dir(char ** str, const char * base_dir)
+{
+	*str = (char*)malloc(strlen(PUSHOBJ_DIR) + strlen(base_dir) + 1);
+	sprintf(*str, "%s/%s", base_dir, PUSHOBJ_DIR);
+}
+
 int update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 {
-	struct strbuf pobj_dir = STRBUF_INIT;
+	char *users_dir = NULL;		// base/pushobjects/pgp
+	char *pobj_dir = NULL;		// base/pushobjects/
+	char *proj_dir = NULL;		// base/pushobjects/pgp/projname
+	char pgp_size_raw[5];
+	int ch;
+	int ii;
+	int pgp_size;
+	char *pgp_key = NULL;
+	struct strbuf proj_name = STRBUF_INIT;
+	unsigned char sha1[20];
+	char pgp_sha1[41];
 
-	strbuf_addstr(&pobj_dir, "/");
-	strbuf_addstr(&pobj_dir, PUSHOBJ_DIR);
-
-	if (access(pobj_dir.buf, W_OK) != 0) {
-		fprintf(stderr, "pushbobjects dir was not writable\n");
+	pushobjects_dir(&pobj_dir, base_dir);
+	if (access(pobj_dir, W_OK) != 0) {
+		fprintf(stderr, "pushbobjects dir was not writable: %s\n", pobj_dir);
 		exit(1);
 	}
 
+	// read size info in, first 4 bytes
+	for (ii = 0; ii < 4; ++ii) {
+		ch = fgetc(fp);
+		if (ch == EOF) {
+			fprintf(stderr, "error while reading size header\n");
+			exit(1);
+		}
+		pgp_size_raw[ii] = ch;
+	}
+	pgp_size_raw[4] = '\0';
+	pgp_size = strtol(pgp_size_raw, (char**)NULL, 16);
+
+	pgp_key = (char*)malloc(pgp_size+1);
+
 	// hash the pgpkey
+	if (fread(pgp_key, pgp_size, 1, fp) == 1) {
+		// now that we have pgp key, hash it 
+		fprintf(stderr, "hashing pgpkey\n");
 
-	// ensure that the directory exists
+		pgp_key[pgp_size] = '\0';
+		
+		git_SHA_CTX c;
+		git_SHA1_Init(&c);
+		git_SHA1_Update(&c, pgp_key, pgp_size);
+		git_SHA1_Final(sha1, &c);
+
+		sprintf(pgp_sha1, "%s", sha1_to_hex(sha1));
+		pgp_sha1[40] = '\0';
+	} else {
+		fprintf(stderr, "pgpkey error: bad pushobject format\n");
+		exit(1);
+	}
+
+	// next line is the project name
+	if (strbuf_getline(&proj_name, fp, '\n') == EOF) {
+		fprintf(stderr, "No projname: bad pushobject format\n");
+		exit(1);
+	}
+
+	// ensure that the users directory exists
+	users_dir = (char*)malloc(strlen(pobj_dir) + 40  + 1);
+	sprintf(users_dir, "%s/%s", pobj_dir, pgp_sha1);
+	printf("users_dir: %s\n", users_dir);
+	safe_create_dir(users_dir);
+
+	// ensure that the projectname directory exists
+	proj_dir = (char*)malloc(strlen(users_dir) + proj_name.len + 1);
+	sprintf(proj_dir, "%s/%s", users_dir, proj_name.buf);
+	printf("proj_dir: %s\n", proj_dir);
+	safe_create_dir(proj_dir);
+
+	// traverse projectname dir to find stuff
 
 
-	strbuf_release(&pobj_dir);
+	free(pobj_dir);
+	free(proj_dir);
+	free(users_dir);
+	free(pgp_key);
+	strbuf_release(&proj_name);
 
 	fclose(fp);
 
