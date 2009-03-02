@@ -43,7 +43,6 @@ static int handle_one_ref(const char *path, const unsigned char *sha1,
 			|| !prefixcmp(path, "refs/stash"))
 		return 0;
 
-	// fprintf(cb->refs_file, "%s %s\n", sha1_to_hex(sha1), path);
 	strbuf_addstr(cb->buf, sha1_to_hex(sha1));
 	strbuf_addstr(cb->buf, " ");
 	strbuf_addstr(cb->buf, path);
@@ -246,11 +245,64 @@ static struct projdir* init_projdir(const char * basedir, ssize_t pgp_size,
 		pd->head[40] = '\0';
 
 		head_fp = fopen(head, "w");
-		fprintf(head_fp, "%s", pd->head);
+		fprintf(head_fp, "%s\n", pd->head);
 		fclose(head_fp);
 	}
 
 	return pd;
+}
+
+/**
+ * Update the project head file, and the projdir struct's head
+ */
+static void update_proj_head(struct projdir * pd, const char * sha1)
+{
+	FILE * head_fp;
+	char * head_path = NULL;
+
+	head_path = (char*)malloc(strlen(pd->projdir) + 1 + 4 + 1);
+	sprintf(head_path, "%s/HEAD", pd->projdir);
+
+	head_fp = fopen(head_path, "w");
+	fprintf(head_fp, "%s\n", sha1);
+	fclose(head_fp);
+	
+	strcpy(pd->head, sha1);
+	free(head_path);
+}
+
+/**
+ * Given projdir and strbuf containing the pushobject, update with new
+ * pushobject and update head file as well as projdir struct.
+ */
+static void append_pushobj(struct projdir * pd, struct strbuf * pobj)
+{
+	unsigned char sha1[20];
+	char sha1_hex[41];
+	FILE * pobj_fp;
+	char * file_path;
+	git_SHA_CTX c;
+
+	git_SHA1_Init(&c);
+	git_SHA1_Update(&c, pobj->buf, pobj->len);
+	git_SHA1_Final(sha1, &c);
+
+	file_path = (char*)malloc(strlen(pd->projdir) + 40 + 1);
+	strcpy(sha1_hex, sha1_to_hex(sha1));
+	sprintf(file_path, "%s/%s", pd->projdir, sha1_hex);
+
+	if (access(file_path, F_OK) == 0) {
+		fprintf(stderr, "Push object already exists\n");
+		exit(1);
+	}
+
+	pobj_fp = fopen(file_path, "w");
+	fprintf(pobj_fp, "%s", pobj->buf);
+	fprintf(pobj_fp, "%s PREV\n", pd->head);
+	fclose(pobj_fp);
+
+	update_proj_head(pd, sha1_hex);
+	free(file_path);
 }
 
 int update_pl(FILE *fp, const char * base_dir, unsigned int flags)
@@ -260,6 +312,7 @@ int update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 	int ch = 0, ii = 0, pgp_size = 0;
 	unsigned char *pgp_key = NULL;
 	struct strbuf proj_name = STRBUF_INIT;
+	struct strbuf pobj = STRBUF_INIT;
 
 	// read size info in, first 4 bytes
 	for (ii = 0; ii < 4; ++ii) {
@@ -288,16 +341,20 @@ int update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 	}
 
 	pd = init_projdir(base_dir, pgp_size, pgp_key, proj_name.buf);
-	printf("users_dir: %s\n", pd->userdir);
-	printf("proj_dir: %s\n", pd->projdir);
-	printf("head_rev: %s\n", pd->head);
 
-	// traverse projectname dir to find stuff
+	// rest of the stuff is pushobj stuff
+	while ((ch = fgetc(fp)) != EOF) {
+		strbuf_grow(&pobj, 1);
+		pobj.buf[pobj.len++] = ch;
+		pobj.buf[pobj.len] = '\0';
+	}
 
+	append_pushobj(pd, &pobj);
 
 	free(pgp_key);
 	free_projdir(pd);
 	strbuf_release(&proj_name);
+	strbuf_release(&pobj);
 
 	fclose(fp);
 
