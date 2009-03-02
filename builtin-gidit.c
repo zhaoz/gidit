@@ -92,7 +92,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 				basepath);
 			return -1;
 		}
-		rc = update_pl(stdout, basepath, flags);
+		rc = update_pl(stdin, basepath, flags);
 	} else
 		rc = -1;
 
