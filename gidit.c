@@ -10,6 +10,15 @@
 #include "transport.h"
 #include "gidit.h"
 
+struct projdir {
+	char * basedir;
+	ssize_t pgp_size;
+	unsigned char * pgp;
+	unsigned char pgp_sha1[20];
+	char * userdir;
+	char * projdir;
+};
+
 struct gidit_refs_cb_data {
 	// FILE *refs_file;
 	struct strbuf *buf;
@@ -156,31 +165,67 @@ int gidit_init(const char *path)
 	return 0;
 }
 
+/*
 static void pushobjects_dir(char ** str, const char * base_dir)
 {
 	*str = (char*)malloc(strlen(PUSHOBJ_DIR) + strlen(base_dir) + 1);
 	sprintf(*str, "%s/%s", base_dir, PUSHOBJ_DIR);
 }
+*/
+
+static void free_projdir(struct projdir* pd)
+{
+	free(pd->basedir);
+	free(pd->pgp);
+	free(pd->userdir);
+	free(pd->projdir);
+	free(pd);
+}
+
+static struct projdir* init_projdir(const char * basedir, ssize_t pgp_size, 
+		const unsigned char * pgp, const char * projname)
+{
+	ssize_t bd_size;
+	struct projdir * pd = NULL;
+	git_SHA_CTX c;
+	
+	pd = (struct projdir*)malloc(sizeof(struct projdir));
+	bd_size = strlen(basedir) + 1; 
+
+	pd->basedir = (char*)malloc(bd_size);
+	memcpy(pd->basedir, basedir, bd_size);
+
+	pd->pgp_size = pgp_size;
+	pd->pgp = (unsigned char *)malloc(pgp_size);
+	memcpy(pd->pgp, pgp, pgp_size);
+
+	git_SHA1_Init(&c);
+	git_SHA1_Update(&c, pgp, pgp_size);
+	git_SHA1_Final(pd->pgp_sha1, &c);
+
+	// ensure dir existence
+	
+	pd->userdir = (char*)malloc(strlen(basedir) + 1 + strlen(PUSHOBJ_DIR) + 1
+								+ 40 + 1);
+	sprintf(pd->userdir, "%s/%s/%s", basedir, PUSHOBJ_DIR, 
+			sha1_to_hex(pd->pgp_sha1));
+	safe_create_dir(pd->userdir);
+
+	pd->projdir = (char*)malloc(strlen(pd->userdir) + strlen(projname) + 1);
+	sprintf(pd->projdir, "%s/%s", pd->userdir, projname);
+	safe_create_dir(pd->projdir);
+
+
+	return pd;
+}
 
 int update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 {
-	char *users_dir = NULL;		// base/pushobjects/pgp
-	char *pobj_dir = NULL;		// base/pushobjects/
-	char *proj_dir = NULL;		// base/pushobjects/pgp/projname
+	struct projdir * pd;
 	char pgp_size_raw[5];
-	int ch;
-	int ii;
-	int pgp_size;
-	char *pgp_key = NULL;
+	int ch = 0, ii = 0, pgp_size = 0;
+	unsigned char *pgp_key = NULL;
 	struct strbuf proj_name = STRBUF_INIT;
-	unsigned char sha1[20];
-	char pgp_sha1[41];
-
-	pushobjects_dir(&pobj_dir, base_dir);
-	if (access(pobj_dir, W_OK) != 0) {
-		fprintf(stderr, "pushbobjects dir was not writable: %s\n", pobj_dir);
-		exit(1);
-	}
 
 	// read size info in, first 4 bytes
 	for (ii = 0; ii < 4; ++ii) {
@@ -194,23 +239,10 @@ int update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 	pgp_size_raw[4] = '\0';
 	pgp_size = strtol(pgp_size_raw, (char**)NULL, 16);
 
-	pgp_key = (char*)malloc(pgp_size+1);
+	pgp_key = (unsigned char*)malloc(pgp_size);
 
 	// hash the pgpkey
-	if (fread(pgp_key, pgp_size, 1, fp) == 1) {
-		// now that we have pgp key, hash it 
-		fprintf(stderr, "hashing pgpkey\n");
-
-		pgp_key[pgp_size] = '\0';
-		
-		git_SHA_CTX c;
-		git_SHA1_Init(&c);
-		git_SHA1_Update(&c, pgp_key, pgp_size);
-		git_SHA1_Final(sha1, &c);
-
-		sprintf(pgp_sha1, "%s", sha1_to_hex(sha1));
-		pgp_sha1[40] = '\0';
-	} else {
+	if (fread(pgp_key, pgp_size, 1, fp) != 1) {
 		fprintf(stderr, "pgpkey error: bad pushobject format\n");
 		exit(1);
 	}
@@ -221,25 +253,15 @@ int update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 		exit(1);
 	}
 
-	// ensure that the users directory exists
-	users_dir = (char*)malloc(strlen(pobj_dir) + 40  + 1);
-	sprintf(users_dir, "%s/%s", pobj_dir, pgp_sha1);
-	printf("users_dir: %s\n", users_dir);
-	safe_create_dir(users_dir);
-
-	// ensure that the projectname directory exists
-	proj_dir = (char*)malloc(strlen(users_dir) + proj_name.len + 1);
-	sprintf(proj_dir, "%s/%s", users_dir, proj_name.buf);
-	printf("proj_dir: %s\n", proj_dir);
-	safe_create_dir(proj_dir);
+	pd = init_projdir(base_dir, pgp_size, pgp_key, proj_name.buf);
+	printf("users_dir: %s\n", pd->userdir);
+	printf("proj_dir: %s\n", pd->projdir);
 
 	// traverse projectname dir to find stuff
 
 
-	free(pobj_dir);
-	free(proj_dir);
-	free(users_dir);
 	free(pgp_key);
+	free_projdir(pd);
 	strbuf_release(&proj_name);
 
 	fclose(fp);
