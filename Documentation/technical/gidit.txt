@@ -41,7 +41,9 @@ The file structure would be:
 ./pushobjects/SHA1 of PGP Key/ProjectName/PushObjSHA1
 
 The ProjectName folder would hold the PushObjects. There is a special file in
-this folder called HEAD which would hold the most recent PushObject's SHA1.
+this folder called HEAD which would hold the most recent PushObject's
+SHA1. The SHA1 is calculated by the PushObject contents excluding the
+pgp signature, (only the SHA1s and their references).
 
 Bundles would be stored similar to how git stores objects. A folder 
 of the two char SHA1 prefix, followed by a folder consisting of the 

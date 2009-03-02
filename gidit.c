@@ -8,6 +8,7 @@
 #include "remote.h"
 #include "strbuf.h"
 #include "transport.h"
+#include "pgp.h"
 #include "gidit.h"
 
 struct projdir {
@@ -190,7 +191,7 @@ static struct projdir* init_projdir(const char * basedir, ssize_t pgp_size,
 	char * head = NULL;
 	FILE * head_fp;
 	git_SHA_CTX c;
-	
+
 	pd = (struct projdir*)malloc(sizeof(struct projdir));
 	bd_size = strlen(basedir) + 1; 
 
@@ -275,7 +276,8 @@ static void update_proj_head(struct projdir * pd, const char * sha1)
  * Given projdir and strbuf containing the pushobject, update with new
  * pushobject and update head file as well as projdir struct.
  */
-static void append_pushobj(struct projdir * pd, struct strbuf * pobj)
+static void append_pushobj(struct projdir * pd, struct strbuf * pobj, 
+							struct strbuf *sig)
 {
 	unsigned char sha1[20];
 	char sha1_hex[41];
@@ -298,6 +300,7 @@ static void append_pushobj(struct projdir * pd, struct strbuf * pobj)
 
 	pobj_fp = fopen(file_path, "w");
 	fprintf(pobj_fp, "%s", pobj->buf);
+	fprintf(pobj_fp, "%s", sig->buf);
 	fprintf(pobj_fp, "%s PREV\n", pd->head);
 	fclose(pobj_fp);
 
@@ -312,6 +315,7 @@ int update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 	int ch = 0, ii = 0, pgp_size = 0;
 	unsigned char *pgp_key = NULL;
 	struct strbuf proj_name = STRBUF_INIT;
+	struct strbuf buf = STRBUF_INIT;
 	struct strbuf pobj = STRBUF_INIT;
 
 	// read size info in, first 4 bytes
@@ -342,19 +346,29 @@ int update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 
 	pd = init_projdir(base_dir, pgp_size, pgp_key, proj_name.buf);
 
-	// rest of the stuff is pushobj stuff
-	while ((ch = fgetc(fp)) != EOF) {
-		strbuf_grow(&pobj, 1);
-		pobj.buf[pobj.len++] = ch;
-		pobj.buf[pobj.len] = '\0';
+	while (strbuf_getline(&buf, fp, '\n') != EOF) {
+		if (strncmp(buf.buf, PGP_SIGNATURE, strlen(PGP_SIGNATURE)) == 0) {
+			strbuf_addstr(&buf, "\n");
+			break;
+		}
+		strbuf_addstr(&pobj, buf.buf);
+		strbuf_addstr(&pobj, "\n");
 	}
 
-	append_pushobj(pd, &pobj);
+	// rest of the stuff is sig stuff
+	while ((ch = fgetc(fp)) != EOF) {
+		strbuf_grow(&buf, 1);
+		buf.buf[buf.len++] = ch;
+		buf.buf[buf.len] = '\0';
+	}
+
+	append_pushobj(pd, &pobj, &buf);
 
 	free(pgp_key);
 	free_projdir(pd);
 	strbuf_release(&proj_name);
 	strbuf_release(&pobj);
+	strbuf_release(&buf);
 
 	fclose(fp);
 
