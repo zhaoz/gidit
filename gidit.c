@@ -17,6 +17,7 @@ struct projdir {
 	unsigned char pgp_sha1[20];
 	char * userdir;
 	char * projdir;
+	char head[41];
 };
 
 struct gidit_refs_cb_data {
@@ -187,6 +188,8 @@ static struct projdir* init_projdir(const char * basedir, ssize_t pgp_size,
 {
 	ssize_t bd_size;
 	struct projdir * pd = NULL;
+	char * head = NULL;
+	FILE * head_fp;
 	git_SHA_CTX c;
 	
 	pd = (struct projdir*)malloc(sizeof(struct projdir));
@@ -215,6 +218,37 @@ static struct projdir* init_projdir(const char * basedir, ssize_t pgp_size,
 	sprintf(pd->projdir, "%s/%s", pd->userdir, projname);
 	safe_create_dir(pd->projdir);
 
+	// attempt to get latest pushobj, if exists, if not, create empty file
+	memset(pd->head, 0, 41);
+	head = (char*)malloc(strlen(pd->projdir) + 1 + 4 + 1);
+	sprintf(head, "%s/HEAD", pd->projdir);
+
+	if (access(head, F_OK) == 0) {
+		// file exists, open up for reading
+		head_fp = fopen(head, "r");
+
+		if (!head_fp) {
+			perror("Error while looking up head revision\n");
+			exit(1);
+		}
+
+		if (fread(pd->head, 40, 1, head_fp) != 1) {
+			fprintf(stderr, "error while reading head revision\n");
+			exit(1);
+		}
+		pd->head[40] = '\0';
+
+		fclose(head_fp);
+	} else {
+		// HEAD file does not exist, create a new one, also set to 0
+
+		memset(pd->head, '0', 40);
+		pd->head[40] = '\0';
+
+		head_fp = fopen(head, "w");
+		fprintf(head_fp, "%s", pd->head);
+		fclose(head_fp);
+	}
 
 	return pd;
 }
@@ -256,6 +290,7 @@ int update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 	pd = init_projdir(base_dir, pgp_size, pgp_key, proj_name.buf);
 	printf("users_dir: %s\n", pd->userdir);
 	printf("proj_dir: %s\n", pd->projdir);
+	printf("head_rev: %s\n", pd->head);
 
 	// traverse projectname dir to find stuff
 
