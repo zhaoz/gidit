@@ -13,7 +13,7 @@
 #include "gidit.h"
 
 static const char * const gidit_usage[] = {
-	"git gidit [-s|-u <key-id>] [[[--tags] --pushobj] | [-b <base_dir> --updatepl]]",
+	"git gidit [-s|-u <key-id>] [[[--tags] --pushobj] | [-b <base_dir> --updatepl] | [--send -k <key> -m <message>]",
 	NULL,
 };
 
@@ -32,10 +32,12 @@ static int git_gidit_config(const char *var, const char *value, void *cb)
 int cmd_gidit(int argc, const char **argv, const char *prefix)
 {
 	int flags = 0;
-	int tags = 0, pushobj = 0, updatepo = 0, sign = 0;
+	int tags = 0, pushobj = 0, updatepo = 0, sign = 0, send=0;
 
 	const char *base_dir;
 	const char *keyid;
+	const char *nodekey;
+	const char *message;
 
 	int rc;
 
@@ -46,7 +48,10 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		OPT_STRING('u', NULL, &keyid, "key-id",
 					"use another key to sign the tag"),
 		OPT_BOOLEAN( 0 , "pushobj", &pushobj, "generate push object"),
+		OPT_BOOLEAN( 0 , "send", &send, "send message to other node"),
 		OPT_BOOLEAN( 0 , "updatepl", &updatepo, "Update push list"),
+		OPT_STRING('k',NULL, &nodekey, "nodekey", "key of node"),
+		OPT_STRING('m',NULL, &message, "message", "message to send"),
 		OPT_STRING('b', NULL, &base_dir, "base_dir", "base_dir for daemon"),
 		OPT_END()
 	};
@@ -72,6 +77,10 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 
 	if (pushobj) 
 		rc = gen_pushobj(stdout, signingkey, sign, flags);
+	
+	if (send)
+		rc = send_message(nodekey, message);
+
 	else
 		rc = -1;
 

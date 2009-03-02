@@ -2,6 +2,7 @@
 #include "pkt-line.h"
 #include "exec_cmd.h"
 #include "chimera.h"
+#include "gidit.h"
 
 #include <syslog.h>
 
@@ -11,10 +12,6 @@
 
 #ifndef NI_MAXSERV
 #define NI_MAXSERV 32
-#endif
-
-#ifndef DEFAULT_CHIMERA_PORT
-#define DEFAULT_CHIMERA_PORT 2323
 #endif
 
 
@@ -995,7 +992,7 @@ static void gidit_init(char * bootstrap_addr, int bootstrap_port, int local_port
         chimera_update (state, test_update);
         chimera_setkey (state, key);
         chimera_register (state, TEST_CHAT, 1);
-	chimera_join(state,host);
+	//chimera_join(state,host);
 }
 
 int main(int argc, char **argv)
