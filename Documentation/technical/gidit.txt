@@ -60,7 +60,6 @@ tag/branch being pushed.
 
 An example of the contents of a saved PushObject:
 
-	-----BEGIN PUSH OBJECT-----
 	bf562635643c29adb3bae3057c0f01403994b17c HEAD
 	616c9272a6b2125d224ffc9ecabdaf07f9afffa9 refs/heads/master
 	bf562635643c29adb3bae3057c0f01403994b17c refs/heads/po_store
@@ -74,12 +73,20 @@ An example of the contents of a saved PushObject:
 	=WtY8
 	-----END PGP SIGNATURE-----
 	522a47cd385352ae03f2c3ef44eae561c1cf3af6 PREV
-	-----END PUSH OBJECT-----
 
 The line with PREV is all 0's if it is the first pushobject.
 
 PushObjects, went sent over the wire, do not have the PREV either.
 
 
+Client->Daemon PushObjects
+--------------------------
 
+PushObjects when sent off from client to daemon are in this form:
+[size of pgpkey][pgpkey][projname]\n[pushobject]
 
+The PushObject looks like the section between "BEGIN PUSH OBJECT" and
+"BEGIN PGP SIGNATURE" from the PushObject example.
+
+The [size of pgpkey] is 4 bytes ascii hex. The [pgpkey] is the binary
+output of your pgpkey, equivalent to `gpg --export [id]`.
