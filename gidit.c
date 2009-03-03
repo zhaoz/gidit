@@ -297,6 +297,7 @@ static void update_proj_head(struct projdir * pd, const char * sha1)
 /**
  * Given projdir and strbuf containing the pushobject, update with new
  * pushobject and update head file as well as projdir struct.
+ * TODO verify pushobj with PGP key
  */
 static void append_pushobj(struct projdir * pd, struct strbuf * pobj, 
 							struct strbuf *sig)
@@ -335,7 +336,6 @@ int update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 	struct projdir * pd;
 	char pgp_sha1[41];
 	int ch = 0;
-	unsigned char *pgp_key = NULL;
 	struct strbuf proj_name = STRBUF_INIT;
 	struct strbuf buf = STRBUF_INIT;
 	struct strbuf pobj = STRBUF_INIT;
@@ -372,7 +372,6 @@ int update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 
 	append_pushobj(pd, &pobj, &buf);
 
-	free(pgp_key);
 	free_projdir(pd);
 	strbuf_release(&proj_name);
 	strbuf_release(&pobj);
@@ -422,8 +421,6 @@ int gidit_user_init(FILE *fp, const char * base_dir, unsigned int flags)
 		fprintf(stderr, "user already exists and known!\n");
 		exit(1);
 	}
-
-	fprintf(stderr, "pgp len is: %d\n", pgp_len);
 
 	safe_create_dir(userdir);
 
