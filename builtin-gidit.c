@@ -15,7 +15,8 @@
 static const char * const gidit_usage[] = {
 	"git gidit [-s|-u <key-id>] [--tags] --pushobj",
 	"git gidit -b <base_dir> --init",
-	"git gidit -b <base-path> --updatepl",
+	"echo <PGPSize><PGP> | git gidit -b <base_dir> --user-init",
+	"echo <PGPSHA1><proj>\\n<pushobj> | git gidit -b <base-path> --updatepl",
 	NULL,
 };
 
