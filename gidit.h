@@ -19,6 +19,11 @@ int gen_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags);
 int gidit_init(const char *path);
 
 /**
+ * Initialize a users dir
+ */
+int gidit_user_init(FILE *fp, const char * basepath, unsigned int flags);
+
+/**
  * Read pushobj from fp and save, will need to take
  */
 int update_pl(FILE *fp, const char * basepath, unsigned int flags);

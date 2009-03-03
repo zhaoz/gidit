@@ -31,10 +31,24 @@ static int git_gidit_config(const char *var, const char *value, void *cb)
 	return git_default_config(var, value, cb);
 }
 
+static int base_path_test(const char * basepath)
+{
+	if (!basepath) {
+		return error("Need basepath.");
+	}
+	if (*basepath != '/') {
+		/* Allow only absolute */
+		return error("'%s': Non-absolute path denied (base-path active)",
+				basepath);
+	}
+	return 0;
+}
+
 int cmd_gidit(int argc, const char **argv, const char *prefix)
 {
 	int flags = 0;
-	int tags = 0, init = 0, verbose = 0, pushobj = 0, updatepl = 0, sign = 0;
+	int tags = 0, init = 0, verbose = 0, pushobj = 0, updatepl = 0, sign = 0,
+		user_init = 0;
 
 	const char *basepath = NULL;
 	const char *keyid = NULL;
@@ -49,10 +63,11 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		OPT_STRING('u', NULL, &keyid, "key-id",
 					"use another key to sign the tag"),
 		OPT_BOOLEAN( 0 , "pushobj", &pushobj, "generate push object"),
-		OPT_BOOLEAN( 0 , "init", &init, "init gidit directory"),
 		OPT_GROUP(""),
 		OPT_BOOLEAN( 0 , "updatepl", &updatepl, "Update push list"),
 		OPT_STRING('b', NULL, &basepath, "base-path", "base-path for daemon"),
+		OPT_BOOLEAN( 0 , "init", &init, "init gidit directory"),
+		OPT_BOOLEAN( 0 , "user-init", &user_init, "init users gidit directory"),
 		OPT_END()
 	};
 
@@ -78,20 +93,19 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 	if (pushobj) 
 		rc = gen_pushobj(stdout, signingkey, sign, flags);
 	else if (init) {
-		if (!basepath) {
-			fprintf(stderr, "Need to give a basepath to init\n");
-			exit(1);
-		}
+		rc = base_path_test(basepath);
+		if (rc)
+			return rc;
 		rc = gidit_init(basepath);
+	} else if (user_init) {
+		rc = base_path_test(basepath);
+		if (rc)
+			return rc;
+		rc = gidit_user_init(stdin, basepath, flags);
 	} else if (updatepl) {
-		if (!basepath)
-			return error("Need base dir with updatepl.");
-		if (*basepath != '/') {
-			/* Allow only absolute */
-			fprintf(stderr, "'%s': Non-absolute path denied (base-path active)",
-				basepath);
-			return -1;
-		}
+		rc = base_path_test(basepath);
+		if (rc)
+			return rc;
 		rc = update_pl(stdin, basepath, flags);
 	} else
 		rc = -1;

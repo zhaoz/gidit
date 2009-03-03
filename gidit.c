@@ -357,3 +357,67 @@ int update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 
 	return 0;
 }
+
+int gidit_user_init(FILE *fp, const char * base_dir, unsigned int flags)
+{
+	int pgp_len;
+	FILE * pgp_fp;
+	char * userdir = NULL;
+	char * pgp_file = NULL;
+	char pgp_len_raw[5];
+	unsigned char sha1[20];
+	unsigned char *pgp_key = NULL;
+	git_SHA_CTX c;
+
+	if (fread(pgp_len_raw, 4, 1, fp) != 1) {
+		fprintf(stderr, "Protocol error, could not read pgp_len");
+		exit(1);
+	}
+
+	pgp_len = strtol(pgp_len_raw, (char**)NULL, 16);
+
+	pgp_key = (unsigned char*)malloc(pgp_len);
+
+	if (fread(pgp_key, pgp_len, 1, fp) != 1) {
+		fprintf(stderr, "Error while reading pgp_key");
+		exit(1);
+	}
+
+	// hash the pgp key
+	git_SHA1_Init(&c);
+	git_SHA1_Update(&c, pgp_key, pgp_len);
+	git_SHA1_Final(sha1, &c);
+
+	userdir = (char*)malloc(strlen(base_dir) + 1 + strlen(PUSHOBJ_DIR) + 1 + 
+							40 + 1);
+	sprintf(userdir, "%s/%s/%s", base_dir, PUSHOBJ_DIR, sha1_to_hex(sha1));
+
+	// make sure userdir doesn't exist already
+	if (access(userdir, F_OK) == 0) {
+		fprintf(stderr, "user already exists and known!\n");
+		exit(1);
+	}
+
+	fprintf(stderr, "pgp len is: %d\n", pgp_len);
+
+	safe_create_dir(userdir);
+
+	// save the PGP key in there
+	pgp_file = (char*)malloc(strlen(userdir) + 1 + 3);
+	sprintf(pgp_file, "%s/PGP", userdir);
+
+	pgp_fp = fopen(pgp_file, "w");
+	if (!pgp_fp) {
+		fprintf(stderr, "Error while saving PGP key!\n");
+		exit(1);
+	}
+
+	fwrite(pgp_key, pgp_len, 1, pgp_fp);
+	fclose(pgp_fp);
+
+	free(userdir);
+	free(pgp_key);
+	free(pgp_file);
+
+	return 0;
+}
