@@ -22,7 +22,6 @@ struct projdir {
 };
 
 struct gidit_refs_cb_data {
-	// FILE *refs_file;
 	struct strbuf *buf;
 	unsigned int flags;
 };
@@ -99,7 +98,7 @@ static int do_sign(struct strbuf *buffer, char * signingkey) {
 	return 0;
 }
 
-int gen_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags)
+int gidit_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags)
 {
 	const char *head;
 	unsigned char head_sha1[21];
@@ -111,8 +110,10 @@ int gen_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags)
 
 	head = resolve_ref("HEAD", head_sha1, 0, NULL);
 	head_sha1[20] = '\0';
-	if (!head)
-		die("Failed to resolve HEAD as a valid ref.");
+	if (!head) {
+		strbuf_release(&buf);
+		return error("Failed to resolve HEAD as a valid ref.");
+	}
 	
 	strbuf_add(&buf, sha1_to_hex(head_sha1), 40);
 	strbuf_addstr(&buf, " HEAD\n");
@@ -122,7 +123,10 @@ int gen_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags)
 	if (sign)
 		do_sign(&buf, signingkey);
 
-	fprintf(fp, "%s", buf.buf);
+	if (fwrite(buf.buf, buf.len, 1, fp) != 1) {
+		strbuf_release(&buf);
+		return error("Error while writing pushobj");
+	}
 
 	strbuf_release(&buf);
 	return 0;
@@ -161,7 +165,8 @@ static int safe_create_rel_dir(const char *base, const char *rel)
 int gidit_init(const char *path)
 {
 	int rc = 0;
-	safe_create_dir(path);
+	if ((rc = safe_create_dir(path)))
+		return rc;
 
 	// create these dirs if they don't exist
 	if ((rc = safe_create_rel_dir(path, BUNDLES_DIR)) == 0 && 
@@ -320,7 +325,7 @@ static void append_pushobj(struct projdir * pd, struct strbuf * pobj,
 	free(file_path);
 }
 
-int update_pl(FILE *fp, const char * base_dir, unsigned int flags)
+int gidit_update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 {
 	struct projdir * pd;
 	char pgp_sha1[41];

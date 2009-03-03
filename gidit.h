@@ -10,7 +10,7 @@
  * Generate a pushobj, which is a list of all refs including HEAD, and
  * excluding stashes and remotes
  */
-int gen_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags);
+int gidit_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags);
 
 /**
  * Initialize a gidit directory, that means creating the PUSHOBJ_DIR and 
@@ -26,6 +26,6 @@ int gidit_user_init(FILE *fp, const char * basepath, unsigned int flags);
 /**
  * Read pushobj from fp and save, will need to take
  */
-int update_pl(FILE *fp, const char * basepath, unsigned int flags);
+int gidit_update_pl(FILE *fp, const char * basepath, unsigned int flags);
 
 #endif		// GIDIT_H

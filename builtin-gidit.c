@@ -91,7 +91,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		flags |= INCLUDE_TAGS;
 
 	if (pushobj) 
-		rc = gen_pushobj(stdout, signingkey, sign, flags);
+		rc = gidit_pushobj(stdout, signingkey, sign, flags);
 	else if (init) {
 		rc = base_path_test(basepath);
 		if (rc)
@@ -106,7 +106,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		rc = base_path_test(basepath);
 		if (rc)
 			return rc;
-		rc = update_pl(stdin, basepath, flags);
+		rc = gidit_update_pl(stdin, basepath, flags);
 	} else
 		rc = -1;
 
