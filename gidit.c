@@ -13,6 +13,7 @@
 
 struct projdir {
 	char * basedir;
+	int pgp_len;
 	unsigned char * pgp;
 	unsigned char pgp_sha1[20];
 	char * userdir;
@@ -191,7 +192,8 @@ static struct projdir* get_projdir(const char * basedir, const char * sha1_hex,
 	ssize_t bd_size;
 	struct projdir * pd = NULL;
 	char * head = NULL;
-	FILE * head_fp;
+	char * pgp_file = NULL;
+	FILE * fp;
 
 	pd = (struct projdir*)malloc(sizeof(struct projdir));
 	bd_size = strlen(basedir) + 1; 
@@ -222,30 +224,53 @@ static struct projdir* get_projdir(const char * basedir, const char * sha1_hex,
 
 	if (access(head, F_OK) == 0) {
 		// file exists, open up for reading
-		head_fp = fopen(head, "r");
+		fp = fopen(head, "r");
 
-		if (!head_fp) {
+		if (!fp) {
 			perror("Error while looking up head revision\n");
 			exit(1);
 		}
 
-		if (fread(pd->head, 40, 1, head_fp) != 1) {
+		if (fread(pd->head, 40, 1, fp) != 1) {
 			fprintf(stderr, "error while reading head revision\n");
 			exit(1);
 		}
 		pd->head[40] = '\0';
 
-		fclose(head_fp);
+		fclose(fp);
 	} else {
 		// HEAD file does not exist, create a new one, also set to 0
 
 		memset(pd->head, '0', 40);
 		pd->head[40] = '\0';
 
-		head_fp = fopen(head, "w");
-		fprintf(head_fp, "%s\n", pd->head);
-		fclose(head_fp);
+		fp = fopen(head, "w");
+		fprintf(fp, "%s\n", pd->head);
+		fclose(fp);
 	}
+
+	// get the PGP stuff
+	pgp_file = (char *)malloc(strlen(pd->userdir) + 1 + 3);
+	sprintf(pgp_file, "%s/PGP", pd->userdir);
+	fp = fopen(pgp_file, "r");
+	if (!fp) {
+		fprintf(stderr, "error while retrieiving PGP info\n");
+		exit(1);
+	}
+
+	fseek(fp, 0, SEEK_END);
+	pd->pgp_len = ftell(fp);
+	fseek(fp, 0, SEEK_SET);
+
+	pd->pgp = (unsigned char*)malloc(pd->pgp_len);
+
+	if (fread(pd->pgp, pd->pgp_len, 1, fp) != 1) {
+		fprintf(stderr, "error while retrieiving PGP info\n");
+		exit(1);
+	}
+
+	fclose(fp);
+	free(pgp_file);
 
 	return pd;
 }
