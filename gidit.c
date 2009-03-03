@@ -206,7 +206,10 @@ static struct projdir* get_projdir(const char * basedir, const char * sha1_hex,
 	pd->userdir = (char*)malloc(strlen(basedir) + 1 + strlen(PUSHOBJ_DIR) + 1
 								+ 40 + 1);
 	sprintf(pd->userdir, "%s/%s/%s", basedir, PUSHOBJ_DIR, sha1_hex);
-	safe_create_dir(pd->userdir);
+	if (access(pd->userdir, W_OK|R_OK|X_OK) != 0) {
+		fprintf(stderr, "Unknown user/pgp key, please initialize user first\n");
+		exit(1);
+	}
 
 	pd->projdir = (char*)malloc(strlen(pd->userdir) + strlen(projname) + 1);
 	sprintf(pd->projdir, "%s/%s", pd->userdir, projname);
@@ -317,8 +320,6 @@ int update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 		exit(1);
 	}
 	pgp_sha1[40] = '\0';
-
-	fprintf(stderr, "pgp: %s\n", pgp_sha1);
 
 	// next line is the project name
 	if (strbuf_getline(&proj_name, fp, '\n') == EOF) {
