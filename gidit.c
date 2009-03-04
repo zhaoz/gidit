@@ -5,11 +5,14 @@
 #include "refs.h"
 #include "run-command.h"
 #include "builtin.h"
+#include "string-list.h"
 #include "remote.h"
 #include "strbuf.h"
 #include "transport.h"
 #include "pgp.h"
 #include "gidit.h"
+
+#define END_SHA1 "0000000000000000000000000000000000000000"
 
 struct projdir {
 	char * basedir;
@@ -20,6 +23,13 @@ struct projdir {
 	char * projdir;
 	char * projname;
 	char head[41];
+};
+
+struct pushobj {
+	int lines;
+	char ** refs;
+	char * signature;
+	char prev[41];
 };
 
 struct gidit_refs_cb_data {
@@ -476,8 +486,133 @@ int gidit_user_init(FILE *fp, const char * base_dir, unsigned int flags)
 	return 0;
 }
 
-int gidit_po_list(FILE *fp, const char * basepath, unsigned int flags) {
+static void pobj_release(struct pushobj *po)
+{
+	int ii;
+	for (ii = 0; ii < po->lines; ii++)
+		free(po->refs[ii]);
+	free(po->refs);
+	free(po->signature);
+}
+
+static int sha_to_pobj(struct pushobj *po, const struct projdir *pd, 
+						const char * sha1)
+{
+	FILE * fp;
+	int ii;
+	char * path = NULL;
+	struct string_list list;
+	char * cbuf;
+	// struct string_list_item *it;
+	struct strbuf buf = STRBUF_INIT;
+	struct strbuf sig = STRBUF_INIT;
+
+	if (strncmp(sha1, END_SHA1, 40) == 0)
+		die("Invalid sha1");
+
+	memset(&list, 0, sizeof(struct string_list));
+
+	path = malloc(strlen(pd->projdir) + 1 + 40 + 1);
+	sprintf(path, "%s/%s", pd->projdir, sha1);
+
+	fp = fopen(path, "r");
+	if (!fp)
+		return error("Could not open pushobj");
+
+	while (strbuf_getline(&buf, fp, '\n') != EOF) {
+		if (strncmp(buf.buf, PGP_SIGNATURE, strlen(PGP_SIGNATURE)) == 0)
+			break;
+		cbuf = (char*)malloc(buf.len);
+		strcpy(cbuf, buf.buf);
+		string_list_append(cbuf, &list);
+	}
+
+	po->lines = list.nr;
+	po->refs = (char**)malloc(sizeof(char*) * list.nr);
+
+	for (ii = 0; ii < list.nr; ii++) {
+		po->refs[ii] = (char*)malloc(strlen(list.items[ii].string) + 1);
+		strcpy(po->refs[ii], list.items[ii].string);
+	}
+
+	// rest of the stuff is signature
+	strbuf_add(&sig, buf.buf, buf.len);
+	strbuf_addstr(&sig, "\n");
+	while (strbuf_getline(&buf, fp, '\n') != EOF) {
+		strbuf_add(&sig, buf.buf, buf.len);
+		strbuf_addstr(&sig, "\n");
+		if (strncmp(buf.buf, END_PGP_SIGNATURE, strlen(END_PGP_SIGNATURE)) == 0)
+			break;
+	}
+	po->signature = (char*)malloc(sig.len);
+	strcpy(po->signature, sig.buf);
+
+	free(path);
+	strbuf_release(&buf);
+	strbuf_release(&sig);
+	string_list_clear(&list, 0);
+
+	// now the rest of the stuff is the prev pointer
+	if (strbuf_getline(&buf, fp, '\n') == EOF) 
+		return error("Could not get prev pointer");
+
+	strncpy(po->prev, buf.buf, 40);
+	po->prev[40] = '\0';
+
+	strbuf_release(&buf);
+
+	return 0;
+}
+
+static void print_pobj(struct pushobj *po)
+{
+	int ii;
+	for (ii = 0; ii < po->lines; ii++)
+		printf("%s\n", po->refs[ii]);
+	printf("%s", po->signature);
+}
+
+int gidit_po_list(FILE *fp, const char * basepath, unsigned int flags)
+{
+	struct projdir * pd;
+	char pgp_sha1[41];
+	struct strbuf proj_name = STRBUF_INIT;
+	struct pushobj po;
+	int rc = 0;
+
+	if (fread(pgp_sha1, 40, 1, fp) != 1)
+		return error("pgpkey error: bad pushobject format");
+	pgp_sha1[40] = '\0';
+	
+	// next line is the project name
+	if (strbuf_getline(&proj_name, fp, '\n') == EOF)
+		return error("No projname: bad pushobject format");
 
 	fclose(fp);
-	return 0;
+
+	pd = new_projdir(basepath, pgp_sha1, proj_name.buf);
+	if (!pd)
+		exit(1);
+
+	strbuf_release(&proj_name);
+
+	// grab pushobjects and dump them out
+	// start with the head pushobj
+	if ((rc = sha_to_pobj(&po, pd, pd->head)) != 0)
+		die("Failed pushobjlist generation");
+	
+	print_pobj(&po);
+
+	while (strncmp(po.prev, END_SHA1, 40) != 0 &&
+			(rc = sha_to_pobj(&po, pd, po.prev)) == 0) {
+		print_pobj(&po);
+	}
+
+	if (rc)
+		die("Error during pushobjlist generation");
+
+	pobj_release(&po);
+	free_projdir(pd);
+
+	return rc;
 }
