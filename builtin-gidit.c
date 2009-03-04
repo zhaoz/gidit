@@ -17,6 +17,7 @@ static const char * const gidit_usage[] = {
 	"git gidit -b <base_dir> --init",
 	"echo <PGPSize><PGP> | git gidit -b <base_dir> --user-init",
 	"echo <PGPSHA1><proj>\\n<pushobj> | git gidit -b <base-path> --updatepl",
+	"echo <PGPSHA1><proj> | git gidit -b <base-path> --polist",
 	NULL,
 };
 
@@ -49,7 +50,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 {
 	int flags = 0;
 	int tags = 0, init = 0, verbose = 0, pushobj = 0, updatepl = 0, sign = 0,
-		user_init = 0;
+		user_init = 0, polist = 0;
 
 	const char *basepath = NULL;
 	const char *keyid = NULL;
@@ -69,6 +70,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		OPT_STRING('b', NULL, &basepath, "base-path", "base-path for daemon"),
 		OPT_BOOLEAN( 0 , "init", &init, "init gidit directory"),
 		OPT_BOOLEAN( 0 , "user-init", &user_init, "init users gidit directory"),
+		OPT_BOOLEAN( 0 , "polist", &polist, "Generate list of push objects"),
 		OPT_END()
 	};
 
@@ -91,24 +93,23 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 	if (tags)
 		flags |= INCLUDE_TAGS;
 
-	if (pushobj) 
-		rc = gidit_pushobj(stdout, signingkey, sign, flags);
-	else if (init) {
+	if (basepath) {
 		rc = base_path_test(basepath);
 		if (rc)
 			return rc;
+	}
+
+	if (init)
 		rc = gidit_init(basepath);
-	} else if (user_init) {
-		rc = base_path_test(basepath);
-		if (rc)
-			return rc;
+	else if (user_init)
 		rc = gidit_user_init(stdin, basepath, flags);
-	} else if (updatepl) {
-		rc = base_path_test(basepath);
-		if (rc)
-			return rc;
+	else if (pushobj)
+		rc = gidit_pushobj(stdout, signingkey, sign, flags);
+	else if (updatepl)
 		rc = gidit_update_pl(stdin, basepath, flags);
-	} else
+	else if (polist)
+		rc = gidit_po_list(stdin, basepath, flags);
+	else
 		rc = -1;
 
 	if (rc == -1)

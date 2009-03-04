@@ -474,3 +474,9 @@ int gidit_user_init(FILE *fp, const char * base_dir, unsigned int flags)
 
 	return 0;
 }
+
+int gidit_po_list(FILE *fp, const char * basepath, unsigned int flags) {
+
+	fclose(fp);
+	return 0;
+}
