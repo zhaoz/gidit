@@ -75,7 +75,21 @@ test_expect_success 'PushObject update should fail on no pushobj' '
 '
 
 test_expect_success 'polist should work' '
-	(echo -n "$PGP_SHA1$PROJ_NAME") | git gidit --polist -b $GIDIT_DIR
+	(echo -n "$PGP_SHA1$PROJ_NAME") | git gidit --polist -b $GIDIT_DIR > tmpfile &&
+	test `cat tmpfile | grep "BEGIN PGP" | wc -l` -eq 1
+'
+
+# generate another pushobj update
+test_expect_success 'Second PushObject update should work' '
+	(echo "$PGP_SHA1$PROJ_NAME" && git gidit --pushobj -s) | git gidit --updatepl -b $GIDIT_DIR &&
+	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD &&
+	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD` && 
+	test `ls $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME | wc -l` -eq 3
+'
+
+test_expect_success 'polist should work for two objs' '
+	(echo -n "$PGP_SHA1$PROJ_NAME") | git gidit --polist -b $GIDIT_DIR > tmpfile &&
+	test `cat tmpfile | grep "BEGIN PGP" | wc -l` -eq 2
 '
 
 # clean up
