@@ -122,7 +122,7 @@ static void test_fwd (Key ** kp, Message ** mp, ChimeraHost ** hp)
         ChimeraHost *h = *hp;
 
         fprintf (stderr, "Routing %s (%s) to %s via %s:%d\n",
-                        (m->type == TEST_CHAT) ? ("CHAT") : ("JOIN"), m->payload,
+                        (m->type == TEST_CHAT) ? ("CHAT") : ("JOIN"), m->payload+sizeof(int),
                         k->keystr, h->name, h->port);
 
 }
@@ -133,7 +133,7 @@ static void test_del (Key * k, Message * m)
         if (m->type == TEST_CHAT)
         {
 		logerror("PID: %u",getpid());
-		logerror("Delivered TEST (%s) to %s\n",m->payload,k->keystr);
+		logerror("Delivered TEST (%s) to %s\n",m->payload+sizeof(int),k->keystr);
 		chimera_send(chimera_state, m->source, RETURN_CHAT, strlen(m->payload)+1, m->payload);
         }if(m->type == RETURN_CHAT){
 		int * pid;
@@ -177,6 +177,7 @@ static void gidit_init(char * bootstrap_addr, int bootstrap_port, int local_port
 	}
 
 	str_to_key(key_str, &key);
+	logerror("Initializing key %s",key.keystr);
 	//Set up signal handler
 	sigfillset (&block_mask);
 	usr_action.sa_handler = signal_fun;
@@ -1261,8 +1262,20 @@ int main(int argc, char **argv)
 	if (chimera_port == 0)
 		chimera_port = DEFAULT_CHIMERA_PORT;
 
-	if(!key)
-		key = "1111111111111111111111111111111";
+	if(!key){
+		unsigned char keyBuf[20];
+		char shaBuf[41];
+		int i;
+		srand(time(NULL));
+		
+		for(i = 0; i < sizeof(keyBuf); i++){
+			keyBuf[i] = (unsigned char) (rand()%256);
+		}
+
+		sprintf(shaBuf, "%s", sha1_to_hex(keyBuf));
+		shaBuf[40] = '\0';
+		key = shaBuf;
+	}
 	gidit_init(bootstrap_addr, bootstrap_port, chimera_port, key);
 	
 	if (inetd_mode) {
