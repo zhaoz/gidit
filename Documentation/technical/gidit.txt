@@ -1,20 +1,15 @@
-git-gidit-daemon
+git-gidit
 =============
 
 Overall operation
 -----------------
 
-. Connects to the gidit cloud and handles bundle send/receiving
+. Generates PushObjects and other things needed by the gidit-daemon
 
-. Learns what refs the cloud has and what is needed, pulls in 
-  what is needed, and forwards off to the git client.
+. Stuff runs in git client, and calls gidit-daemon
 
-. Daemon runs, and participates in cloud operations while 
-  waiting for actions from local git clients.
-
-
-Git Daemon
-----------
+Gidit Objects
+-------------
 
 The DHT cloud stores two main types of objects, PushObjects, and
 bundles. 
@@ -80,15 +75,3 @@ The line with PREV is all 0's if it is the first pushobject.
 
 PushObjects, went sent over the wire, do not have the PREV either.
 
-
-Client->Daemon PushObjects
---------------------------
-
-PushObjects when sent off from client to daemon are in this form:
-[sha1 of pgpkey][projname]\n[pushobject]
-
-The PushObject looks like the section between "BEGIN PUSH OBJECT" and
-"BEGIN PGP SIGNATURE" from the PushObject example.
-
-The [sha1 of pgpkey] is the binary output of your pgpkey sha1'd,
-equivalent to `gpg --export [id] | sha1sum`.

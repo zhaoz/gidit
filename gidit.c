@@ -293,7 +293,6 @@ static struct projdir* new_projdir(const char * basedir, const char * sha1_hex,
 	sprintf(pd->projdir, "%s/%s", pd->userdir, projname);
 
 	// attempt to get latest pushobj, if exists, if not, create empty file
-	// XXX head will be filled in init_projdir
 	if (init_projdir(pd)) {
 		free_projdir(pd);
 		return NULL;
