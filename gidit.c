@@ -7,6 +7,7 @@
 #include "builtin.h"
 #include "remote.h"
 #include "transport.h"
+#include "pkt-line.h"
 #include "gidit.h"
 
 struct gidit_refs_cb_data {
@@ -124,10 +125,8 @@ int send_message(char * key, void * message)
     struct sockaddr_in daemonAddr; /* Echo server address */
     unsigned short daemonPort;     /* Echo server port */
     char *daemonIP;                    /* Server IP address (dotted quad) */
-    char echoBuffer[256];     /* Buffer for echo string */
-    unsigned int sendLen;      /* Length of string to send*/
-    int bytesRcvd, totalBytesRcvd;   /* Bytes read in single recv() 
-                                        and total bytes read */
+    char buf[256];     /* Buffer for echo string */
+    int strLen;
 
     daemonIP = "127.0.0.1";             /* First arg: server IP address (dotted quad) */
     daemonPort = 9418;  /* 7 is the well-known port for the echo service */
@@ -142,37 +141,20 @@ int send_message(char * key, void * message)
     daemonAddr.sin_addr.s_addr = inet_addr(daemonIP);   /* Server IP address */
     daemonAddr.sin_port        = htons(daemonPort); /* Server port */
 
+    /* Format outgoing buffer*/
+    strcpy(buf,"git-send");
+    strcat(buf," /home/crab/cse490h/gidit/");
+    strLen = strlen(buf);
+    strcpy(buf+strLen+1,key);
+
     /* Establish the connection to the echo server */
     if (connect(sock, (struct sockaddr *) &daemonAddr, sizeof(daemonAddr)) < 0)
         die("connect() failed");
 
-    sendLen = strlen(key);          /* Determine input length */
-
     /* Send the key to the server */
-    if (send(sock, key, sendLen, 0) != sendLen)
-        die("send() sent a different number of bytes than expected");
-
-    sendLen = strlen(message);          /* Determine input length */
-
-    /* Send the message to the server */
-    if (send(sock, message, sendLen, 0) != sendLen)
-	die("send() sent a different number of bytes than expected");
-
-    /* Receive the same string back from the server 
-    totalBytesRcvd = 0;
-    printf("Received: ");                /* Setup to print the echoed string 
-    while (totalBytesRcvd < echoStringLen)
-    {
-        /* Receive up to the buffer size (minus 1 to leave space for
- *            a null terminator) bytes from the sender 
-        if ((bytesRcvd = recv(sock, echoBuffer, RCVBUFSIZE - 1, 0)) <= 0)
-            DieWithError("recv() failed or connection closed prematurely");
-        totalBytesRcvd += bytesRcvd;   /* Keep tally of total bytes 
-        echoBuffer[bytesRcvd] = '\0';  /* Terminate the string! 
-        printf("%s", echoBuffer);      /* Print the echo buffer 
-    }
-
-    printf("\n");    /* Print a final linefeed */
+    packet_write(sock, buf);
+    packet_write(sock, key);
+    packet_write(sock, message);
 
     close(sock);
     return 0;

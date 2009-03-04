@@ -20,7 +20,7 @@ static int verbose;
 static int reuseaddr;
 
 static const char daemon_usage[] =
-"git-gidit-daemon [--host=bootstrap] [--host-port=n]\n"
+"git-gidit-daemon [--key|--key=key] [--host=bootstrap] [--host-port=n]\n"
 "           [--chimera-port=n] [--verbose] [--syslog] [--export-all]\n"
 "           [--timeout=n] [--init-timeout=n] [--max-connections=n]\n"
 "           [--strict-paths] [--base-path=path] [--base-path-relaxed]\n"
@@ -101,6 +101,97 @@ static void NORETURN daemon_die(const char *err, va_list params)
 {
 	logreport(LOG_ERR, err, params);
 	exit(1);
+}
+
+//GIDIT-UPCALLS
+#define TEST_CHAT 15
+#define RETURN_CHAT 16
+static ChimeraState * chimera_state;
+volatile sig_atomic_t return_interrupt = 0;
+
+void signal_fun(int sig){
+	return_interrupt = 1;
+}
+
+
+static void test_fwd (Key ** kp, Message ** mp, ChimeraHost ** hp)
+{
+
+        Key *k = *kp;
+        Message *m = *mp;
+        ChimeraHost *h = *hp;
+
+        fprintf (stderr, "Routing %s (%s) to %s via %s:%d\n",
+                        (m->type == TEST_CHAT) ? ("CHAT") : ("JOIN"), m->payload,
+                        k->keystr, h->name, h->port);
+
+}
+
+static void test_del (Key * k, Message * m)
+{
+
+        if (m->type == TEST_CHAT)
+        {
+		logerror("PID: %u",getpid());
+		logerror("Delivered TEST (%s) to %s\n",m->payload,k->keystr);
+		chimera_send(chimera_state, m->source, RETURN_CHAT, strlen(m->payload)+1, m->payload);
+        }if(m->type == RETURN_CHAT){
+		int * pid;
+		logerror("PID: %u",getpid());
+		logerror("Delivered RETURN (%s) to %s\n",m->payload+sizeof(int),k->keystr);
+		pid = (int*)m->payload;
+		kill(*pid, SIGUSR1);
+	}
+
+}
+
+static void test_update (Key * k, ChimeraHost * h, int joined)
+{
+
+        if (joined)
+        {
+                fprintf (stderr, "Node %s:%s:%d joined neighbor set\n", k->keystr,
+                                h->name, h->port);
+        }
+        else
+        {
+                fprintf (stderr, "Node %s:%s:%d leaving neighbor set\n",
+                                k->keystr, h->name, h->port);
+        }
+
+}
+
+
+static void gidit_init(char * bootstrap_addr, int bootstrap_port, int local_port, char * key_str){
+	Key key;
+	ChimeraHost * host;
+	struct sigaction usr_action;
+	sigset_t block_mask;
+
+	//Debug, remove later
+	export_all_trees = 1;
+	//Initialize Chimera nonsense
+	chimera_state = chimera_init(local_port);
+	if (bootstrap_addr){
+		host = host_get(chimera_state, bootstrap_addr, bootstrap_port);
+	}
+
+	str_to_key(key_str, &key);
+	//Set up signal handler
+	sigfillset (&block_mask);
+	usr_action.sa_handler = signal_fun;
+	usr_action.sa_mask = block_mask;
+	usr_action.sa_flags = 0;
+	sigaction(SIGUSR1, &usr_action, NULL);
+
+	/*    Place upcalls here    */
+	chimera_forward (chimera_state, test_fwd);
+        chimera_deliver (chimera_state, test_del);
+        chimera_update (chimera_state, test_update);
+        chimera_setkey (chimera_state, key);
+        chimera_register (chimera_state, TEST_CHAT, 1);
+	chimera_join(chimera_state,host);
+	
 }
 
 static int avoid_alias(char *p)
@@ -371,10 +462,38 @@ static int receive_pack(void)
 	return -1;
 }
 
+static int send_service(void)
+{
+	char key[256];
+	char message[256];
+	int pktlen, pid;
+	Key chimera_key;
+
+	pktlen = packet_read_line(0, key, sizeof(key));
+	if(pktlen==-1)
+		die("error reading key");
+	pid = getpid();
+	memcpy(message,&pid,sizeof(int));
+	pktlen = packet_read_line(0, message+sizeof(int), sizeof(message)-sizeof(int));
+	if(pktlen==-1)
+		die("error reading message");
+
+	str_to_key (key, &chimera_key);
+	chimera_send (chimera_state, chimera_key, TEST_CHAT, strlen(message)+1, message);
+			         
+	while(!return_interrupt){
+		sleep(1);
+	}
+	logerror("Message Returned");
+
+	return -1;
+}
+
 static struct daemon_service daemon_service[] = {
 	{ "upload-archive", "uploadarch", upload_archive, 0, 1 },
 	{ "upload-pack", "uploadpack", upload_pack, 1, 1 },
 	{ "receive-pack", "receivepack", receive_pack, 0, 1 },
+	{ "send", "send", send_service, 1, 1},
 };
 
 static void enable_service(const char *name, int ena)
@@ -929,71 +1048,6 @@ static int serve(char *listen_addr, int listen_port, struct passwd *pass, gid_t 
 	return service_loop(socknum, socklist);
 }
 
-#define TEST_CHAT 15
-
-void test_fwd (Key ** kp, Message ** mp, ChimeraHost ** hp)
-{
-
-        Key *k = *kp;
-        Message *m = *mp;
-        ChimeraHost *h = *hp;
-
-        fprintf (stderr, "Routing %s (%s) to %s via %s:%d\n",
-                        (m->type == TEST_CHAT) ? ("CHAT") : ("JOIN"), m->payload,
-                        k->keystr, h->name, h->port);
-
-}
-
-void test_del (Key * k, Message * m)
-{
-
-        fprintf (stderr, "Delivered %s (%s) to %s\n",
-                        (m->type == TEST_CHAT) ? ("CHAT") : ("JOIN"), m->payload,
-                        k->keystr);
-
-        if (m->type == TEST_CHAT)
-        {
-                fprintf (stderr, "** %s **\n", m->payload);
-        }
-
-}
-
-void test_update (Key * k, ChimeraHost * h, int joined)
-{
-
-        if (joined)
-        {
-                fprintf (stderr, "Node %s:%s:%d joined neighbor set\n", k->keystr,
-                                h->name, h->port);
-        }
-        else
-        {
-                fprintf (stderr, "Node %s:%s:%d leaving neighbor set\n",
-                                k->keystr, h->name, h->port);
-        }
-
-}
-
-static void gidit_init(char * bootstrap_addr, int bootstrap_port, int local_port, char * key_str){
-	Key key;
-	ChimeraHost * host;
-	//Initialize Chimera nonsense
-	ChimeraState * state = chimera_init(local_port);
-
-	if (bootstrap_addr){
-		host = host_get(state, bootstrap_addr, bootstrap_port);
-	}
-
-	str_to_key(key_str, &key);
-
-	/*    Place upcalls here    */
-	chimera_forward (state, test_fwd);
-        chimera_deliver (state, test_del);
-        chimera_update (state, test_update);
-        chimera_setkey (state, key);
-        chimera_register (state, TEST_CHAT, 1);
-	//chimera_join(state,host);
-}
 
 int main(int argc, char **argv)
 {
@@ -1009,12 +1063,21 @@ int main(int argc, char **argv)
 	char *bootstrap_addr = NULL;
 	int bootstrap_port = 0;
 	int chimera_port = 0;
+	char *key = NULL;
 
 	git_extract_argv0_path(argv[0]);
 
 	for (i = 1; i < argc; i++) {
 		char *arg = argv[i];
 
+		if (!strcmp(arg, "--key")) {
+			key = "zzzzzzzzzzzzzzzzzzzzzzzz";
+			continue;
+		}
+		if (!prefixcmp(arg, "--key=")) {
+			key = arg + 6;
+			continue;
+		}
 		if (!prefixcmp(arg, "--listen=")) {
 			listen_addr = xstrdup_tolower(arg + 9);
 			continue;
@@ -1198,7 +1261,9 @@ int main(int argc, char **argv)
 	if (chimera_port == 0)
 		chimera_port = DEFAULT_CHIMERA_PORT;
 
-	gidit_init(bootstrap_addr, bootstrap_port, chimera_port, "TEMP_KEY");
+	if(!key)
+		key = "1111111111111111111111111111111";
+	gidit_init(bootstrap_addr, bootstrap_port, chimera_port, key);
 	
 	if (inetd_mode) {
 		struct sockaddr_storage ss;
