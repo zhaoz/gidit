@@ -135,18 +135,17 @@ int gidit_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags)
 
 static int safe_create_dir(const char *dir)
 {
+	int rc = 0;
 	if (mkdir(dir, 0777) < 0) {
 		if (errno != EEXIST) {
 			perror(dir);
-			return error("Error while making directory");
-		} 
-
-		if (access(dir, W_OK)) {
-			return error("Unable to write to directory");
+			rc = error("Error while making directory: %s", dir);
+		} else if (access(dir, W_OK)) {
+			rc = error("Unable to write to directory: %s", dir);
 		}
 	}
 
-	return 0;
+	return rc;
 }
 
 static int safe_create_rel_dir(const char *base, const char *rel)
@@ -180,11 +179,21 @@ int gidit_init(const char *path)
 
 static void free_projdir(struct projdir* pd)
 {
-	free(pd->basedir);
-	free(pd->pgp);
-	free(pd->userdir);
-	free(pd->projdir);
-	free(pd->projname);
+	if (pd->basedir)
+		free(pd->basedir);
+
+	if (pd->pgp)
+		free(pd->pgp);
+
+	if (pd->userdir)
+		free(pd->userdir);
+
+	if (pd->projdir)
+		free(pd->projdir);
+
+	if (pd->projname)
+		free(pd->projname);
+
 	free(pd);
 }
 
@@ -198,7 +207,7 @@ static int init_projdir(struct projdir* pd)
 	char * path = NULL;
 	FILE * fp;
 
-	if (!access(pd->userdir, R_OK|W_OK))
+	if (access(pd->userdir, R_OK|W_OK))
 		return error("User does not exist");
 	
 	if (safe_create_dir(pd->projdir))
@@ -228,30 +237,29 @@ static int init_projdir(struct projdir* pd)
 	if (access(pd->userdir, W_OK|R_OK|X_OK) != 0)
 		return error("Unknown user/pgp key, please initialize user first\n");
 
-	if (safe_create_dir(pd->projdir))
-		return -1;
-
 	path = (char*)malloc(strlen(pd->projdir) + 1 + 4 + 1);
 	sprintf(path, "%s/HEAD", pd->projdir);
 
-	ret = access(path, F_OK);
-	fp = fopen(path, "rw");
+	if (access(path, F_OK) == 0) {
+		fp = fopen(path, "r");
 
-	free(path);
+		if (!fp) 
+			die("Error while looking up head revision");
 
-	if (!fp) 
-		return error("Error while looking up head revision");
-
-	if (ret == 0) {
 		len = fread(pd->head, 40, 1, fp);
 		pd->head[40] = '\0';
 	} else {
+		fp = fopen(path, "w");
+
+		if (!fp) 
+			die("Error while looking up head revision");
+
 		memset(pd->head, '0', 40);
 		pd->head[40] = '\0';
 		fprintf(fp, "%s\n", pd->head);
 	}
+	free(path);
 	fclose(fp);
-
 
 	return 0;
 }
@@ -351,6 +359,7 @@ static int append_pushobj(struct projdir * pd, struct strbuf * pobj,
 
 int gidit_update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 {
+
 	struct projdir * pd;
 	char pgp_sha1[41];
 	int ch = 0, rc = 0;
@@ -368,6 +377,9 @@ int gidit_update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 		return error("No projname: bad pushobject format");
 
 	pd = new_projdir(base_dir, pgp_sha1, proj_name.buf);
+
+	if (!pd)
+		exit(1);
 
 	while (strbuf_getline(&buf, fp, '\n') != EOF) {
 		if (strncmp(buf.buf, PGP_SIGNATURE, strlen(PGP_SIGNATURE)) == 0) {
@@ -425,6 +437,7 @@ int gidit_user_init(FILE *fp, const char * base_dir, unsigned int flags)
 		return error("Error while reading pgp_key");
 	}
 
+
 	// hash the pgp key
 	git_SHA1_Init(&c);
 	git_SHA1_Update(&c, pgp_key, pgp_len);
@@ -441,22 +454,20 @@ int gidit_user_init(FILE *fp, const char * base_dir, unsigned int flags)
 		return error("User already exists");
 	}
 
+	if (safe_create_dir(userdir))
+		exit(1);
 
 	// save the PGP key in there
 	pgp_file = (char*)malloc(strlen(userdir) + 1 + 3);
 	sprintf(pgp_file, "%s/PGP", userdir);
+
 	free(userdir);
 
 	pgp_fp = fopen(pgp_file, "w");
 	free(pgp_file);
 
-	if (safe_create_dir(userdir))
-		return -1;
-
-	if (!pgp_fp) {
-		fclose(pgp_fp);
-		return error("Error while saving PGP key");
-	}
+	if (!pgp_fp)
+		die("Error while saving PGP key");
 
 	fwrite(pgp_key, pgp_len, 1, pgp_fp);
 	fclose(pgp_fp);

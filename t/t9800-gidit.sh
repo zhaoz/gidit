@@ -9,18 +9,27 @@ Tests for non daemon operations gidit.'
 
 . ./test-lib.sh
 
-GIDIT_DIR=/tmp/gidit_test_dir
+export GIDIT_DIR="$TEST_DIRECTORY/gidit_test_dir"
+export PROJ_NAME="test"
 
-test_expect_success 'init gidit directory should succeed' "
+test -e $GIDIT_DIR && rm -r $GIDIT_DIR
+
+test_expect_success 'init gidit directory should succeed' '
 	git gidit --init -b $GIDIT_DIR && 
 	test -e $GIDIT_DIR &&
 	test -e $GIDIT_DIR/pushobjects &&
 	test -e $GIDIT_DIR/bundles
-"
+'
 
 test_expect_success 'pushobject generation should work, unsigned' '
 	git gidit --pushobj &&
 	git gidit --pushobj --tags
+'
+
+
+test_expect_success 'userdir not inited, should not be able to updatepl' '
+	(cat $TEST_DIRECTORY/t9800/pgp_sha1 && echo "$PROJ_NAME" && cat $TEST_DIRECTORY/t9800/pushobj) | git gidit --updatepl -b $GIDIT_DIR; 
+	test $? -ne 0
 '
 
 # subsequent tests require gpg; check if it is available
@@ -42,10 +51,25 @@ chmod 0700 gpghome
 GNUPGHOME="$(pwd)/gpghome"
 export GNUPGHOME
 test_expect_success 'signed pushobject generation should work' '
-	git gidit --pushobj -s | grep "BEGIN PGP SIGNATURE"
+	git gidit --pushobj -u committer | grep "BEGIN PGP SIGNATURE"
 '
 
-test_done
+export PGP_LEN=`printf "%04x" \`gpg --export | wc -c\``
+export PGP_SHA1=`gpg --export | sha1sum | head -c 40`
+
+test_expect_success 'User dir init should work' '
+	(echo -n $PGP_LEN && gpg --export) | git gidit --user-init -b $GIDIT_DIR &&
+	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/PGP 
+'
+
+test_expect_success 'PushObject update should work' '
+	(echo -n $PGP_SHA1 && echo $PROJ_NAME && cat $TEST_DIRECTORY/t9800/pushobj) | git gidit --updatepl -b $GIDIT_DIR &&
+	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD &&
+	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD`
+'
 
 # clean up
 rm -rf $GIDIT_DIR
+
+test_done
+
