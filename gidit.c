@@ -301,6 +301,9 @@ static struct projdir* new_projdir(const char * basedir, const char * sha1_hex,
 	pd->projdir = (char*)malloc(strlen(pd->userdir) + strlen(projname) + 1);
 	sprintf(pd->projdir, "%s/%s", pd->userdir, projname);
 
+	pd->projname = (char*)malloc(strlen(projname) + 1);
+	strcpy(pd->projname, projname);
+
 	// attempt to get latest pushobj, if exists, if not, create empty file
 	if (init_projdir(pd)) {
 		free_projdir(pd);
