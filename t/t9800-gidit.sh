@@ -68,6 +68,11 @@ test_expect_success 'PushObject update should work' '
 	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD`
 '
 
+test_expect_success 'PushObject update should fail on no pushobj' '
+	(echo -n $PGP_SHA1 && echo -n $PROJ_NAME) | git gidit --updatepl -b $GIDIT_DIR;
+	test $? -ne 0
+'
+
 # clean up
 rm -rf $GIDIT_DIR
 

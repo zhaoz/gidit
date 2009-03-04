@@ -203,7 +203,6 @@ static void free_projdir(struct projdir* pd)
 static int init_projdir(struct projdir* pd)
 {
 	int len = 0;
-	int ret = 0;
 	char * path = NULL;
 	FILE * fp;
 
@@ -358,7 +357,6 @@ static int append_pushobj(struct projdir * pd, struct strbuf * pobj,
 
 int gidit_update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 {
-
 	struct projdir * pd;
 	char pgp_sha1[41];
 	int ch = 0, rc = 0;
@@ -388,6 +386,9 @@ int gidit_update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 		strbuf_addstr(&pobj, buf.buf);
 		strbuf_addstr(&pobj, "\n");
 	}
+
+	if (!buf.len)
+		return error("no pushobject given");
 
 	// rest of the stuff is sig stuff
 	while ((ch = fgetc(fp)) != EOF) {
