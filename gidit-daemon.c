@@ -161,7 +161,7 @@ static void test_update (Key * k, ChimeraHost * h, int joined)
 
 static void gidit_init(char * bootstrap_addr, int bootstrap_port, int local_port, char * key_str){
 	Key key;
-	ChimeraHost * host;
+	ChimeraHost * host = NULL;
 	struct sigaction usr_action;
 	sigset_t block_mask;
 
@@ -184,11 +184,11 @@ static void gidit_init(char * bootstrap_addr, int bootstrap_port, int local_port
 
 	/*    Place upcalls here    */
 	chimera_forward (chimera_state, test_fwd);
-        chimera_deliver (chimera_state, test_del);
-        chimera_update (chimera_state, test_update);
-        chimera_setkey (chimera_state, key);
-        chimera_register (chimera_state, TEST_CHAT, 1);
-	chimera_join(chimera_state,host);
+	chimera_deliver (chimera_state, test_del);
+	chimera_update (chimera_state, test_update);
+	chimera_setkey (chimera_state, key);
+	chimera_register (chimera_state, TEST_CHAT, 1);
+	chimera_join(chimera_state, host);
 	
 }
 

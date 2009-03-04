@@ -10,6 +10,8 @@
 #include "pkt-line.h"
 #include "gidit.h"
 
+#define TEST_DIR "/tmp/gidit"
+
 struct gidit_refs_cb_data {
 	// FILE *refs_file;
 	struct strbuf *buf;
@@ -143,7 +145,7 @@ int send_message(char * key, void * message)
 
     /* Format outgoing buffer*/
     strcpy(buf,"git-send");
-    strcat(buf," /home/crab/cse490h/gidit/");
+    strcat(buf, TEST_DIR);
     strLen = strlen(buf);
     strcpy(buf+strLen+1,key);
 
