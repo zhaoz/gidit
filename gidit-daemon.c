@@ -122,25 +122,22 @@ static void test_fwd (Key ** kp, Message ** mp, ChimeraHost ** hp)
         ChimeraHost *h = *hp;
 
         fprintf (stderr, "Routing %s (%s) to %s via %s:%d\n",
-                        (m->type == TEST_CHAT) ? ("CHAT") : ("JOIN"), m->payload+sizeof(int),
+                        (m->type == TEST_CHAT) ? ("CHAT") : ("JOIN"), m->payload,
                         k->keystr, h->name, h->port);
 
 }
 
 static void test_del (Key * k, Message * m)
 {
-
+	chat_message message;
+	message = *((chat_message *)m->payload);
         if (m->type == TEST_CHAT)
         {
-		logerror("PID: %u",getpid());
-		logerror("Delivered TEST (%s) to %s\n",m->payload+sizeof(int),k->keystr);
-		chimera_send(chimera_state, m->source, RETURN_CHAT, strlen(m->payload)+1, m->payload);
+		logerror("Delivered TEST (%s) from %u:%s\n",message.message,message.pid,get_key_string(&(message.source)));
+		chimera_send(chimera_state, message.source, RETURN_CHAT, sizeof(message), (char*)&message);
         }if(m->type == RETURN_CHAT){
-		int * pid;
-		logerror("PID: %u",getpid());
-		logerror("Delivered RETURN (%s) to %s\n",m->payload+sizeof(int),k->keystr);
-		pid = (int*)m->payload;
-		kill(*pid, SIGUSR1);
+		logerror("Delivered RETURN (%s) from %u:%s\n",message.message,message.pid,get_key_string(&(message.source)));
+		kill(message.pid, SIGUSR1);
 	}
 
 }
@@ -466,21 +463,22 @@ static int receive_pack(void)
 static int send_service(void)
 {
 	char key[256];
-	char message[256];
-	int pktlen, pid;
+	int pktlen;
 	Key chimera_key;
+	chat_message message;
+	ChimeraGlobal *chblob = (ChimeraGlobal *) chimera_state->chimera;
 
 	pktlen = packet_read_line(0, key, sizeof(key));
 	if(pktlen==-1)
 		die("error reading key");
-	pid = getpid();
-	memcpy(message,&pid,sizeof(int));
-	pktlen = packet_read_line(0, message+sizeof(int), sizeof(message)-sizeof(int));
+	message.pid = getpid();
+	//memcpy(message,&pid,sizeof(int));
+	pktlen = packet_read_line(0, message.message, sizeof(message.message));
 	if(pktlen==-1)
 		die("error reading message");
-
 	str_to_key (key, &chimera_key);
-	chimera_send (chimera_state, chimera_key, TEST_CHAT, strlen(message)+1, message);
+	key_assign(&(message.source),(chblob->me->key));
+	chimera_send (chimera_state, chimera_key, TEST_CHAT, sizeof(message), (char*)&message);
 			         
 	while(!return_interrupt){
 		sleep(1);
