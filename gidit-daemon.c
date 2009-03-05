@@ -21,15 +21,10 @@ static int reuseaddr;
 
 static const char daemon_usage[] =
 "git-gidit-daemon [--key|--key=key] [--host=bootstrap] [--host-port=n]\n"
-"           [--chimera-port=n] [--verbose] [--syslog] [--export-all]\n"
-"           [--timeout=n] [--init-timeout=n] [--max-connections=n]\n"
-"           [--strict-paths] [--base-path=path] [--base-path-relaxed]\n"
-"           [--user-path | --user-path=path]\n"
-"           [--interpolated-path=path]\n"
-"           [--reuseaddr] [--detach] [--pid-file=file]\n"
-"           [--[enable|disable|allow-override|forbid-override]=service]\n"
-"           [--inetd | [--listen=host_or_ipaddr] [--port=n]\n"
-"                      [--user=user [--group=group]]\n"
+"           [--chimera-port=n] [--verbose] [--syslog] \n"
+"           [--timeout=n] [--max-connections=n]\n"
+"           [--base-path=path] [--reuseaddr] [--pid-file=file]\n"
+"           [[--listen=host_or_ipaddr] [--port=n]]\n"
 "           [directory...]";
 
 /* List of acceptable pathname prefixes */
@@ -46,7 +41,6 @@ static int saw_extended_args;
 
 /* Timeout, and initial timeout */
 static unsigned int timeout;
-static unsigned int init_timeout;
 
 static char *hostname;
 static char *canon_hostname;
@@ -399,7 +393,7 @@ static int execute(struct sockaddr *addr)
 		unsetenv("REMOTE_ADDR");
 	}
 
-	alarm(init_timeout ? init_timeout : timeout);
+	alarm(timeout);
 	pktlen = packet_read_line(0, line, sizeof(line));
 	alarm(0);
 
@@ -848,10 +842,6 @@ int main(int argc, char **argv)
 		}
 		if (!prefixcmp(arg, "--timeout=")) {
 			timeout = atoi(arg+10);
-			continue;
-		}
-		if (!prefixcmp(arg, "--init-timeout=")) {
-			init_timeout = atoi(arg+15);
 			continue;
 		}
 		if (!prefixcmp(arg, "--max-connections=")) {
