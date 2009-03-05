@@ -34,24 +34,15 @@ static const char daemon_usage[] =
 
 /* List of acceptable pathname prefixes */
 static char **ok_paths;
-static int strict_paths;
 
 /* If this is set, git-daemon-export-ok is not required */
 static int export_all_trees;
 
 /* Take all paths relative to this one if non-NULL */
 static char *base_path;
-static char *interpolated_path;
-static int base_path_relaxed;
 
 /* Flag indicating client sent extra args. */
 static int saw_extended_args;
-
-/* If defined, ~user notation is allowed and the string is inserted
- * after ~user/.  E.g. a request to git://host/~alice/frotz would
- * go to /home/alice/pub_git/frotz with --user-path=pub_git.
- */
-static const char *user_path;
 
 /* Timeout, and initial timeout */
 static unsigned int timeout;
@@ -113,9 +104,11 @@ void signal_fun(int sig){
 	return_interrupt = 1;
 }
 
-
 static void test_fwd (Key ** kp, Message ** mp, ChimeraHost ** hp)
 {
+	Key *k = *kp;
+	Message *m = *mp;
+	ChimeraHost *h = *hp;
 
         Key *k = *kp;
         Message *m = *mp;
@@ -131,35 +124,30 @@ static void test_del (Key * k, Message * m)
 {
 	chat_message message;
 	message = *((chat_message *)m->payload);
-        if (m->type == TEST_CHAT)
-        {
+	if (m->type == TEST_CHAT) {
 		logerror("Delivered TEST (%s) from %u:%s\n",message.message,message.pid,get_key_string(&(message.source)));
 		chimera_send(chimera_state, message.source, RETURN_CHAT, sizeof(message), (char*)&message);
-        }if(m->type == RETURN_CHAT){
+	} else if (m->type == RETURN_CHAT) {
 		logerror("Delivered RETURN (%s) from %u:%s\n",message.message,message.pid,get_key_string(&(message.source)));
 		kill(message.pid, SIGUSR1);
 	}
-
 }
 
 static void test_update (Key * k, ChimeraHost * h, int joined)
 {
-
-        if (joined)
-        {
-                fprintf (stderr, "Node %s:%s:%d joined neighbor set\n", k->keystr,
-                                h->name, h->port);
-        }
-        else
-        {
-                fprintf (stderr, "Node %s:%s:%d leaving neighbor set\n",
-                                k->keystr, h->name, h->port);
-        }
+	if (joined) {
+		fprintf(stderr, "Node %s:%s:%d joined neighbor set\n", k->keystr,
+				h->name, h->port);
+	} else {
+		fprintf(stderr, "Node %s:%s:%d leaving neighbor set\n",
+				k->keystr, h->name, h->port);
+	}
 
 }
 
 
-static void gidit_init(char * bootstrap_addr, int bootstrap_port, int local_port, char * key_str){
+static void gidit_init (char * bootstrap_addr, int bootstrap_port, int local_port, char * key_str)
+{
 	Key key;
 	ChimeraHost * host = NULL;
 	struct sigaction usr_action;
@@ -189,171 +177,6 @@ static void gidit_init(char * bootstrap_addr, int bootstrap_port, int local_port
 	chimera_setkey (chimera_state, key);
 	chimera_register (chimera_state, TEST_CHAT, 1);
 	chimera_join(chimera_state, host);
-	
-}
-
-static int avoid_alias(char *p)
-{
-	int sl, ndot;
-
-	/*
-	 * This resurrects the belts and suspenders paranoia check by HPA
-	 * done in <435560F7.4080006@zytor.com> thread, now enter_repo()
-	 * does not do getcwd() based path canonicalizations.
-	 *
-	 * sl becomes true immediately after seeing '/' and continues to
-	 * be true as long as dots continue after that without intervening
-	 * non-dot character.
-	 */
-	if (!p || (*p != '/' && *p != '~'))
-		return -1;
-	sl = 1; ndot = 0;
-	p++;
-
-	while (1) {
-		char ch = *p++;
-		if (sl) {
-			if (ch == '.')
-				ndot++;
-			else if (ch == '/') {
-				if (ndot < 3)
-					/* reject //, /./ and /../ */
-					return -1;
-				ndot = 0;
-			}
-			else if (ch == 0) {
-				if (0 < ndot && ndot < 3)
-					/* reject /.$ and /..$ */
-					return -1;
-				return 0;
-			}
-			else
-				sl = ndot = 0;
-		}
-		else if (ch == 0)
-			return 0;
-		else if (ch == '/') {
-			sl = 1;
-			ndot = 0;
-		}
-	}
-}
-
-static char *path_ok(char *directory)
-{
-	static char rpath[PATH_MAX];
-	static char interp_path[PATH_MAX];
-	char *path;
-	char *dir;
-
-	dir = directory;
-
-	if (avoid_alias(dir)) {
-		logerror("'%s': aliased", dir);
-		return NULL;
-	}
-
-	if (*dir == '~') {
-		if (!user_path) {
-			logerror("'%s': User-path not allowed", dir);
-			return NULL;
-		}
-		if (*user_path) {
-			/* Got either "~alice" or "~alice/foo";
-			 * rewrite them to "~alice/%s" or
-			 * "~alice/%s/foo".
-			 */
-			int namlen, restlen = strlen(dir);
-			char *slash = strchr(dir, '/');
-			if (!slash)
-				slash = dir + restlen;
-			namlen = slash - dir;
-			restlen -= namlen;
-			loginfo("userpath <%s>, request <%s>, namlen %d, restlen %d, slash <%s>", user_path, dir, namlen, restlen, slash);
-			snprintf(rpath, PATH_MAX, "%.*s/%s%.*s",
-				 namlen, dir, user_path, restlen, slash);
-			dir = rpath;
-		}
-	}
-	else if (interpolated_path && saw_extended_args) {
-		struct strbuf expanded_path = STRBUF_INIT;
-		struct strbuf_expand_dict_entry dict[] = {
-			{ "H", hostname },
-			{ "CH", canon_hostname },
-			{ "IP", ip_address },
-			{ "P", tcp_port },
-			{ "D", directory },
-			{ "%", "%" },
-			{ NULL }
-		};
-
-		if (*dir != '/') {
-			/* Allow only absolute */
-			logerror("'%s': Non-absolute path denied (interpolated-path active)", dir);
-			return NULL;
-		}
-
-		strbuf_expand(&expanded_path, interpolated_path,
-				strbuf_expand_dict_cb, &dict);
-		strlcpy(interp_path, expanded_path.buf, PATH_MAX);
-		strbuf_release(&expanded_path);
-		loginfo("Interpolated dir '%s'", interp_path);
-
-		dir = interp_path;
-	}
-	else if (base_path) {
-		if (*dir != '/') {
-			/* Allow only absolute */
-			logerror("'%s': Non-absolute path denied (base-path active)", dir);
-			return NULL;
-		}
-		snprintf(rpath, PATH_MAX, "%s%s", base_path, dir);
-		dir = rpath;
-	}
-
-	path = enter_repo(dir, strict_paths);
-	if (!path && base_path && base_path_relaxed) {
-		/*
-		 * if we fail and base_path_relaxed is enabled, try without
-		 * prefixing the base path
-		 */
-		dir = directory;
-		path = enter_repo(dir, strict_paths);
-	}
-
-	if (!path) {
-		logerror("'%s': unable to chdir or not a git archive", dir);
-		return NULL;
-	}
-
-	if ( ok_paths && *ok_paths ) {
-		char **pp;
-		int pathlen = strlen(path);
-
-		/* The validation is done on the paths after enter_repo
-		 * appends optional {.git,.git/.git} and friends, but
-		 * it does not use getcwd().  So if your /pub is
-		 * a symlink to /mnt/pub, you can whitelist /pub and
-		 * do not have to say /mnt/pub.
-		 * Do not say /pub/.
-		 */
-		for ( pp = ok_paths ; *pp ; pp++ ) {
-			int len = strlen(*pp);
-			if (len <= pathlen &&
-			    !memcmp(*pp, path, len) &&
-			    (path[len] == '\0' ||
-			     (!strict_paths && path[len] == '/')))
-				return path;
-		}
-	}
-	else {
-		/* be backwards compatible */
-		if (!strict_paths)
-			return path;
-	}
-
-	logerror("'%s': not in whitelist", path);
-	return NULL;		/* Fallthrough. Deny by default */
 }
 
 typedef int (*daemon_service_fn)(void);
@@ -365,67 +188,9 @@ struct daemon_service {
 	int overridable;
 };
 
-static struct daemon_service *service_looking_at;
-static int service_enabled;
-
-static int git_daemon_config(const char *var, const char *value, void *cb)
-{
-	if (!prefixcmp(var, "daemon.") &&
-	    !strcmp(var + 7, service_looking_at->config_name)) {
-		service_enabled = git_config_bool(var, value);
-		return 0;
-	}
-
-	/* we are not interested in parsing any other configuration here */
-	return 0;
-}
-
 static int run_service(char *dir, struct daemon_service *service)
 {
-	const char *path;
-	int enabled = service->enabled;
-
 	loginfo("Request %s for '%s'", service->name, dir);
-
-	if (!enabled && !service->overridable) {
-		logerror("'%s': service not enabled.", service->name);
-		errno = EACCES;
-		return -1;
-	}
-
-	if (!(path = path_ok(dir)))
-		return -1;
-
-	/*
-	 * Security on the cheap.
-	 *
-	 * We want a readable HEAD, usable "objects" directory, and
-	 * a "git-daemon-export-ok" flag that says that the other side
-	 * is ok with us doing this.
-	 *
-	 * path_ok() uses enter_repo() and does whitelist checking.
-	 * We only need to make sure the repository is exported.
-	 */
-
-	if (!export_all_trees && access("git-daemon-export-ok", F_OK)) {
-		logerror("'%s': repository not exported.", path);
-		errno = EACCES;
-		return -1;
-	}
-
-	if (service->overridable) {
-		service_looking_at = service;
-		service_enabled = -1;
-		git_config(git_daemon_config, NULL);
-		if (0 <= service_enabled)
-			enabled = service_enabled;
-	}
-	if (!enabled) {
-		logerror("'%s': service not enabled for '%s'",
-			 service->name, path);
-		errno = EACCES;
-		return -1;
-	}
 
 	/*
 	 * We'll ignore SIGTERM from now on, we have a
@@ -501,18 +266,6 @@ static void enable_service(const char *name, int ena)
 	for (i = 0; i < ARRAY_SIZE(daemon_service); i++) {
 		if (!strcmp(daemon_service[i].name, name)) {
 			daemon_service[i].enabled = ena;
-			return;
-		}
-	}
-	die("No such service %s", name);
-}
-
-static void make_service_overridable(const char *name, int ena)
-{
-	int i;
-	for (i = 0; i < ARRAY_SIZE(daemon_service); i++) {
-		if (!strcmp(daemon_service[i].name, name)) {
-			daemon_service[i].overridable = ena;
 			return;
 		}
 	}
@@ -1003,24 +756,6 @@ static void sanitize_stdfds(void)
 		close(fd);
 }
 
-static void daemonize(void)
-{
-	switch (fork()) {
-		case 0:
-			break;
-		case -1:
-			die("fork failed: %s", strerror(errno));
-		default:
-			exit(0);
-	}
-	if (setsid() == -1)
-		die("setsid failed: %s", strerror(errno));
-	close(0);
-	close(1);
-	close(2);
-	sanitize_stdfds();
-}
-
 static void store_pid(const char *path)
 {
 	FILE *f = fopen(path, "w");
@@ -1030,7 +765,7 @@ static void store_pid(const char *path)
 		die("failed to write pid file %s: %s", path, strerror(errno));
 }
 
-static int serve(char *listen_addr, int listen_port, struct passwd *pass, gid_t gid)
+static int serve(char *listen_addr, int listen_port)
 {
 	int socknum, *socklist;
 
@@ -1038,11 +773,6 @@ static int serve(char *listen_addr, int listen_port, struct passwd *pass, gid_t 
 	if (socknum == 0)
 		die("unable to allocate any listen sockets on host %s port %u",
 		    listen_addr, listen_port);
-
-	if (pass && gid &&
-	    (initgroups(pass->pw_name, gid) || setgid (gid) ||
-	     setuid(pass->pw_uid)))
-		die("cannot drop privileges");
 
 	return service_loop(socknum, socklist);
 }
@@ -1052,12 +782,7 @@ int main(int argc, char **argv)
 {
 	int listen_port = 0;
 	char *listen_addr = NULL;
-	int inetd_mode = 0;
-	const char *pid_file = NULL, *user_name = NULL, *group_name = NULL;
-	int detach = 0;
-	struct passwd *pass = NULL;
-	struct group *group;
-	gid_t gid = 0;
+	const char *pid_file = NULL;
 	int i;
 	char *bootstrap_addr = NULL;
 	int bootstrap_port = 0;
@@ -1113,21 +838,12 @@ int main(int argc, char **argv)
 			}
 			continue;
 		}
-		if (!strcmp(arg, "--inetd")) {
-			inetd_mode = 1;
-			log_syslog = 1;
-			continue;
-		}
 		if (!strcmp(arg, "--verbose")) {
 			verbose = 1;
 			continue;
 		}
 		if (!strcmp(arg, "--syslog")) {
 			log_syslog = 1;
-			continue;
-		}
-		if (!strcmp(arg, "--export-all")) {
-			export_all_trees = 1;
 			continue;
 		}
 		if (!prefixcmp(arg, "--timeout=")) {
@@ -1144,49 +860,16 @@ int main(int argc, char **argv)
 				max_connections = 0;	        /* unlimited */
 			continue;
 		}
-		if (!strcmp(arg, "--strict-paths")) {
-			strict_paths = 1;
-			continue;
-		}
 		if (!prefixcmp(arg, "--base-path=")) {
 			base_path = arg+12;
-			continue;
-		}
-		if (!strcmp(arg, "--base-path-relaxed")) {
-			base_path_relaxed = 1;
-			continue;
-		}
-		if (!prefixcmp(arg, "--interpolated-path=")) {
-			interpolated_path = arg+20;
 			continue;
 		}
 		if (!strcmp(arg, "--reuseaddr")) {
 			reuseaddr = 1;
 			continue;
 		}
-		if (!strcmp(arg, "--user-path")) {
-			user_path = "";
-			continue;
-		}
-		if (!prefixcmp(arg, "--user-path=")) {
-			user_path = arg + 12;
-			continue;
-		}
 		if (!prefixcmp(arg, "--pid-file=")) {
 			pid_file = arg + 11;
-			continue;
-		}
-		if (!strcmp(arg, "--detach")) {
-			detach = 1;
-			log_syslog = 1;
-			continue;
-		}
-		if (!prefixcmp(arg, "--user=")) {
-			user_name = arg + 7;
-			continue;
-		}
-		if (!prefixcmp(arg, "--group=")) {
-			group_name = arg + 8;
 			continue;
 		}
 		if (!prefixcmp(arg, "--enable=")) {
@@ -1195,14 +878,6 @@ int main(int argc, char **argv)
 		}
 		if (!prefixcmp(arg, "--disable=")) {
 			enable_service(arg + 10, 0);
-			continue;
-		}
-		if (!prefixcmp(arg, "--allow-override=")) {
-			make_service_overridable(arg + 17, 1);
-			continue;
-		}
-		if (!prefixcmp(arg, "--forbid-override=")) {
-			make_service_overridable(arg + 18, 0);
 			continue;
 		}
 		if (!strcmp(arg, "--")) {
@@ -1223,35 +898,8 @@ int main(int argc, char **argv)
 		/* avoid splitting a message in the middle */
 		setvbuf(stderr, NULL, _IOLBF, 0);
 
-	if (inetd_mode && (group_name || user_name))
-		die("--user and --group are incompatible with --inetd");
-
-	if (inetd_mode && (listen_port || listen_addr))
-		die("--listen= and --port= are incompatible with --inetd");
-	else if (listen_port == 0)
+	if (listen_port == 0)
 		listen_port = DEFAULT_GIT_PORT;
-
-	if (group_name && !user_name)
-		die("--group supplied without --user");
-
-	if (user_name) {
-		pass = getpwnam(user_name);
-		if (!pass)
-			die("user not found - %s", user_name);
-
-		if (!group_name)
-			gid = pass->pw_gid;
-		else {
-			group = getgrnam(group_name);
-			if (!group)
-				die("group not found - %s", group_name);
-
-			gid = group->gr_gid;
-		}
-	}
-
-	if (strict_paths && (!ok_paths || !*ok_paths))
-		die("option --strict-paths requires a whitelist");
 
 	if (base_path && !is_directory(base_path))
 		die("base-path '%s' does not exist or is not a directory",
@@ -1260,7 +908,7 @@ int main(int argc, char **argv)
 	if (chimera_port == 0)
 		chimera_port = DEFAULT_CHIMERA_PORT;
 
-	if(!key){
+	if (!key) {
 		unsigned char keyBuf[20];
 		char shaBuf[41];
 		int i;
@@ -1276,30 +924,10 @@ int main(int argc, char **argv)
 	}
 	gidit_init(bootstrap_addr, bootstrap_port, chimera_port, key);
 	
-	if (inetd_mode) {
-		struct sockaddr_storage ss;
-		struct sockaddr *peer = (struct sockaddr *)&ss;
-		socklen_t slen = sizeof(ss);
-
-		if (!freopen("/dev/null", "w", stderr))
-			die("failed to redirect stderr to /dev/null: %s",
-			    strerror(errno));
-
-		if (getpeername(0, peer, &slen))
-			peer = NULL;
-
-		return execute(peer);
-	}
-
-	if (detach) {
-		daemonize();
-		loginfo("Ready to rumble");
-	}
-	else
-		sanitize_stdfds();
+	sanitize_stdfds();
 
 	if (pid_file)
 		store_pid(pid_file);
 
-	return serve(listen_addr, listen_port, pass, gid);
+	return serve(listen_addr, listen_port);
 }

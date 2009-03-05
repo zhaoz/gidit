@@ -144,7 +144,7 @@ int send_message(char * key, void * message)
     daemonAddr.sin_port        = htons(daemonPort); /* Server port */
 
     /* Format outgoing buffer*/
-    strcpy(buf,"git-send");
+    strcpy(buf,"git-send ");
     strcat(buf, TEST_DIR);
     strLen = strlen(buf);
     strcpy(buf+strLen+1,key);
