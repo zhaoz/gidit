@@ -103,11 +103,17 @@ static void test_fwd (Key ** kp, Message ** mp, ChimeraHost ** hp)
 	Key *k = *kp;
 	Message *m = *mp;
 	ChimeraHost *h = *hp;
+	chat_message message;
+	message = *((chat_message *)m->payload);
 
-	fprintf (stderr, "Routing %s (%s) to %s via %s:%d\n",
-			(m->type == TEST_CHAT) ? ("CHAT") : ("JOIN"), m->payload,
-			k->keystr, h->name, h->port);
-
+	if (m->type == TEST_CHAT) {
+		logerror("Routing TEST ((%s)%u:%s) To %s\n",message.message,message.pid,get_key_string(&(message.source)),get_key_string(k));
+		//chimera_send(chimera_state, message.source, RETURN_CHAT, sizeof(message), (char*)&message);
+	}if (m->type == RETURN_CHAT){
+		logerror("Routing RETURN ((%s)%u:%s) To %s\n",message.message,message.pid,get_key_string(&(message.source)),get_key_string(k));
+		//logerror("Routing RETURN (%s) to %u:%s\n",message.message,message.pid,get_key_string(&(message.source)));
+		//chimera_send(chimera_state, *k, RETURN_CHAT, sizeof(message), (char*)&message);
+	}
 }
 
 static void test_del (Key * k, Message * m)
@@ -233,6 +239,7 @@ static int send_service(void)
 		die("error reading message");
 	str_to_key (key, &chimera_key);
 	key_assign(&(message.source),(chblob->me->key));
+	logerror("Sending TEST ((%s)%u:%s) To %s\n",message.message,message.pid,get_key_string(&(message.source)),get_key_string(&chimera_key));
 	chimera_send (chimera_state, chimera_key, TEST_CHAT, sizeof(message), (char*)&message);
 			         
 	while(!return_interrupt){
