@@ -1,0 +1,46 @@
+git-gidit-daemon
+=============
+
+Overall operation
+-----------------
+
+. Connects to the gidit cloud and handles bundle send/receiving
+
+. Learns what refs the cloud has and what is needed, pulls in 
+  what is needed, and forwards off to the git client.
+
+. Daemon runs, and participates in cloud operations while 
+  waiting for actions from local git clients.
+
+. Called by git client and provides shim between it and the chimera DHT
+
+Client-Daemon Operations
+------------------------
+
+. user-init
+
+	Initializes a user's gidit directory. This involves saving their public PGP
+	key as well.
+
+	Format is:
+	[size][pgp public key]
+
+	Can be accessed through:
+	echo -n <stuff> | git gidit --user-init -b /var/gidit/
+
+	the size is a 4 byte ascii hex string respresenting the size of the pgp
+	public key, which is the binary output (gpg --export).
+
+. updatepl
+
+	Updates the pushobject list by creating a new head.
+
+	PushObjects when sent off from client to daemon are in this form:
+	[sha1 of pgpkey][projname]\n[signed pushobject]
+
+	The [sha1 of pgpkey] is the binary output of your pgpkey sha1'd,
+	equivalent to `gpg --export [id] | sha1sum`.
+
+	This can be invoked with:
+	echo -n <stuff> | git gidit --updatepl -b /var/gidit/
+

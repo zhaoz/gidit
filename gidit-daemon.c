@@ -104,13 +104,9 @@ static void test_fwd (Key ** kp, Message ** mp, ChimeraHost ** hp)
 	Message *m = *mp;
 	ChimeraHost *h = *hp;
 
-        Key *k = *kp;
-        Message *m = *mp;
-        ChimeraHost *h = *hp;
-
-        fprintf (stderr, "Routing %s (%s) to %s via %s:%d\n",
-                        (m->type == TEST_CHAT) ? ("CHAT") : ("JOIN"), m->payload,
-                        k->keystr, h->name, h->port);
+	fprintf (stderr, "Routing %s (%s) to %s via %s:%d\n",
+			(m->type == TEST_CHAT) ? ("CHAT") : ("JOIN"), m->payload,
+			k->keystr, h->name, h->port);
 
 }
 
@@ -140,7 +136,7 @@ static void test_update (Key * k, ChimeraHost * h, int joined)
 }
 
 
-static void gidit_init (char * bootstrap_addr, int bootstrap_port, int local_port, char * key_str)
+static void gidit_daemon_init(char * bootstrap_addr, int bootstrap_port, int local_port, char * key_str)
 {
 	Key key;
 	ChimeraHost * host = NULL;
@@ -912,7 +908,7 @@ int main(int argc, char **argv)
 		shaBuf[40] = '\0';
 		key = shaBuf;
 	}
-	gidit_init(bootstrap_addr, bootstrap_port, chimera_port, key);
+	gidit_daemon_init(bootstrap_addr, bootstrap_port, chimera_port, key);
 	
 	sanitize_stdfds();
 

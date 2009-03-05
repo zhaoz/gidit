@@ -1,20 +1,15 @@
-git-gidit-daemon
+git-gidit
 =============
 
 Overall operation
 -----------------
 
-. Connects to the gidit cloud and handles bundle send/receiving
+. Generates PushObjects and other things needed by the gidit-daemon
 
-. Learns what refs the cloud has and what is needed, pulls in 
-  what is needed, and forwards off to the git client.
+. Stuff runs in git client, and calls gidit-daemon
 
-. Daemon runs, and participates in cloud operations while 
-  waiting for actions from local git clients.
-
-
-Git Daemon
-----------
+Gidit Objects
+-------------
 
 The DHT cloud stores two main types of objects, PushObjects, and
 bundles. 
@@ -38,12 +33,12 @@ would be stored in files stored in folders by their PGP keys.
 
 The file structure would be:
 
-./pushobjects/[SHA1 of PGP Key]/ProjectName/[#]_[SHA1]
+./pushobjects/SHA1 of PGP Key/ProjectName/PushObjSHA1
 
-The ProjectName folder would hold the PushObjects. The '#' keeps the 
-push objects in sorted order. The PushObject's SHA1 would be appended
-after the '_'.
-
+The ProjectName folder would hold the PushObjects. There is a special file in
+this folder called HEAD which would hold the most recent PushObject's
+SHA1. The SHA1 is calculated by the PushObject contents excluding the
+pgp signature, (only the SHA1s and their references).
 
 Bundles would be stored similar to how git stores objects. A folder 
 of the two char SHA1 prefix, followed by a folder consisting of the 
@@ -60,9 +55,23 @@ A PushObject is simply a snapshot of a repository (including all
 relevant refs) during a push. It holds a list of SHA1s for each
 tag/branch being pushed.
 
-An example of the contents of a PushObject:
+An example of the contents of a saved PushObject:
 
-52e71bbf899addb4cadd0d7936a281223094ac50 HEAD
-52e71bbf899addb4cadd0d7936a281223094ac50 refs/heads/daemon
-050b90e8d3823122958daa45f14dde8ede1f76dd refs/heads/master
-050b90e8d3823122958daa45f14dde8ede1f76dd refs/heads/working
+	bf562635643c29adb3bae3057c0f01403994b17c HEAD
+	616c9272a6b2125d224ffc9ecabdaf07f9afffa9 refs/heads/master
+	bf562635643c29adb3bae3057c0f01403994b17c refs/heads/po_store
+	616c9272a6b2125d224ffc9ecabdaf07f9afffa9 refs/heads/pushobj
+	616c9272a6b2125d224ffc9ecabdaf07f9afffa9 refs/heads/working
+	-----BEGIN PGP SIGNATURE-----
+	Version: GnuPG v2.0.9 (GNU/Linux)
+
+	iEYEABECAAYFAkmqOgoACgkQZRNrWo5KWPPMiACeOT7S2ptC1/XTIA063Uy6SLId
+	DXoAoK3H8MDQHGB7uEgKsYZPimtzEpeI
+	=WtY8
+	-----END PGP SIGNATURE-----
+	522a47cd385352ae03f2c3ef44eae561c1cf3af6 PREV
+
+The line with PREV is all 0's if it is the first pushobject.
+
+PushObjects, went sent over the wire, do not have the PREV either.
+
