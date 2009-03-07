@@ -17,19 +17,18 @@ Overall operation
 Client-Daemon Operations
 ------------------------
 
-. user-init
+. proj-init
 
-	Initializes a user's gidit directory. This involves saving their public PGP
-	key as well.
+	Initializes a user's gidit project directory. This involves saving their public PGP
+	key as well, if it does not already exist.
 
 	Format is:
-	[size][pgp public key]
+	[projname]\n[pgp public key]
 
 	Can be accessed through:
-	echo -n <stuff> | git gidit --user-init -b /var/gidit/
+	echo -n <stuff> | git gidit --proj-init -b /path/to/gidit/
 
-	the size is a 4 byte ascii hex string respresenting the size of the pgp
-	public key, which is the binary output (gpg --export).
+	pgp key is the binary output, equivalent to gpg --export
 
 . updatepl
 

@@ -15,7 +15,7 @@
 static const char * const gidit_usage[] = {
 	"git gidit [-s|-u <key-id>] [--tags] --pushobj",
 	"git gidit -b <base_dir> --init",
-	"echo <PGPSize><PGP> | git gidit -b <base_dir> --user-init",
+	"echo <projname>\n<PGP> | git gidit -b <base_dir> --proj-init",
 	"echo <PGPSHA1><proj>\\n<pushobj> | git gidit -b <base-path> --updatepl",
 	"echo <PGPSHA1><proj> | git gidit -b <base-path> --polist",
 	NULL,
@@ -50,7 +50,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 {
 	int flags = 0;
 	int tags = 0, init = 0, verbose = 0, pushobj = 0, updatepl = 0, sign = 0,
-		user_init = 0, polist = 0;
+		proj_init = 0, polist = 0;
 
 	const char *basepath = NULL;
 	const char *keyid = NULL;
@@ -69,7 +69,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		OPT_BOOLEAN( 0 , "updatepl", &updatepl, "Update push list"),
 		OPT_STRING('b', NULL, &basepath, "base-path", "base-path for daemon"),
 		OPT_BOOLEAN( 0 , "init", &init, "init gidit directory"),
-		OPT_BOOLEAN( 0 , "user-init", &user_init, "init users gidit directory"),
+		OPT_BOOLEAN( 0 , "proj-init", &proj_init, "init user's gidit project directory"),
 		OPT_BOOLEAN( 0 , "polist", &polist, "Generate list of push objects"),
 		OPT_END()
 	};
@@ -101,8 +101,8 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 
 	if (init)
 		rc = gidit_init(basepath);
-	else if (user_init)
-		rc = gidit_user_init(stdin, basepath, flags);
+	else if (proj_init)
+		rc = gidit_proj_init(stdin, basepath, flags);
 	else if (pushobj)
 		rc = gidit_pushobj(stdout, signingkey, sign, flags);
 	else if (updatepl)

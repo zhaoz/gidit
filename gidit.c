@@ -143,6 +143,10 @@ int gidit_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags)
 	return 0;
 }
 
+/**
+ * Success if directory does not exist yet and was able to create, or 
+ * already exists and is writable
+ */
 static int safe_create_dir(const char *dir)
 {
 	int rc = 0;
@@ -427,64 +431,67 @@ int gidit_update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 /**
  * Initialize user directories, takes PGP
  */
-int gidit_user_init(FILE *fp, const char * base_dir, unsigned int flags)
+int gidit_proj_init(FILE *fp, const char * base_dir, unsigned int flags)
 {
-	int pgp_len;
 	FILE * pgp_fp;
-	char * userdir = NULL;
-	char * pgp_file = NULL;
-	char pgp_len_raw[5];
+	struct strbuf pgp_key = STRBUF_INIT;
+	struct strbuf proj_name = STRBUF_INIT;
 	unsigned char sha1[20];
-	unsigned char *pgp_key = NULL;
+	char pgp_sha1[41];
 	git_SHA_CTX c;
 
-	if (fread(pgp_len_raw, 4, 1, fp) != 1)
-		return error("Protocol error, could not read pgp_len");
+	strbuf_getline(&proj_name, fp, '\n');
 
-	pgp_len = strtol(pgp_len_raw, (char**)NULL, 16);
+	if (proj_name.len == 0) {
+		strbuf_release(&pgp_key);
+		strbuf_release(&proj_name);
+		return error("Error while reading project name\n");
+	}
 
-	pgp_key = (unsigned char*)malloc(pgp_len);
+	strbuf_getline(&pgp_key, fp, EOF);
 
-	if (fread(pgp_key, pgp_len, 1, fp) != 1) {
-		free(pgp_key);
+	if (pgp_key.len == 0) {
+		strbuf_release(&pgp_key);
+		strbuf_release(&proj_name);
 		return error("Error while reading pgp_key");
 	}
 
-
 	// hash the pgp key
 	git_SHA1_Init(&c);
-	git_SHA1_Update(&c, pgp_key, pgp_len);
+	git_SHA1_Update(&c, pgp_key.buf, pgp_key.len);
 	git_SHA1_Final(sha1, &c);
 
-	userdir = (char*)malloc(strlen(base_dir) + 1 + strlen(PUSHOBJ_DIR) + 1 + 
-							40 + 1);
-	sprintf(userdir, "%s/%s/%s", base_dir, PUSHOBJ_DIR, sha1_to_hex(sha1));
 
-	// make sure userdir doesn't exist already
-	if (access(userdir, F_OK) == 0) {
-		free(pgp_key);
-		free(userdir);
-		return error("User already exists");
+	// change dir to pushobjects dir
+	if (chdir(base_dir) != 0 || chdir(PUSHOBJ_DIR) != 0) {
+		return error("Error going to pushobjects directory\n");
 	}
 
-	if (safe_create_dir(userdir))
+	sprintf(pgp_sha1, "%s", sha1_to_hex(sha1));
+
+	if (safe_create_dir(pgp_sha1))
 		exit(1);
 
-	// save the PGP key in there
-	pgp_file = (char*)malloc(strlen(userdir) + 1 + 3);
-	sprintf(pgp_file, "%s/PGP", userdir);
+	chdir(pgp_sha1);
 
-	free(userdir);
+	// now ensure the project directories existence
+	if (safe_create_dir(proj_name.buf))
+		exit(1);
 
-	pgp_fp = fopen(pgp_file, "w");
-	free(pgp_file);
+	// if pgp key file already exists, not need to resave
+	if (access("PGP", F_OK)) {
+		// save the PGP key in there
+		pgp_fp = fopen("PGP", "w");
 
-	if (!pgp_fp)
-		die("Error while saving PGP key");
+		if (!pgp_fp)
+			die("Error while saving PGP key");
 
-	fwrite(pgp_key, pgp_len, 1, pgp_fp);
-	fclose(pgp_fp);
-	free(pgp_key);
+		fwrite(pgp_key.buf, pgp_key.len, 1, pgp_fp);
+
+		fclose(pgp_fp);
+	}
+	strbuf_release(&pgp_key);
+	strbuf_release(&proj_name);
 
 	return 0;
 }

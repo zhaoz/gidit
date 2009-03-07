@@ -57,9 +57,16 @@ test_expect_success 'signed pushobject generation should work' '
 export PGP_LEN=`printf "%04x" \`gpg --export | wc -c\``
 export PGP_SHA1=`gpg --export | sha1sum | head -c 40`
 
-test_expect_success 'User dir init should work' '
-	(echo -n $PGP_LEN && gpg --export) | git gidit --user-init -b $GIDIT_DIR &&
-	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/PGP 
+test_expect_success 'User projdir init should work' '
+	(echo $PROJ_NAME && gpg --export) | git gidit --proj-init -b $GIDIT_DIR &&
+	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/PGP  && 
+	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME 
+'
+
+test_expect_success 'second projdir init should work' '
+	(echo test2 && gpg --export) | git gidit --proj-init -b $GIDIT_DIR &&
+	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/PGP  && 
+	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/test2 
 '
 
 test_expect_success 'PushObject update should work' '

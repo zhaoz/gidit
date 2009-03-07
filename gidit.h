@@ -19,9 +19,9 @@ int gidit_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags);
 int gidit_init(const char *path);
 
 /**
- * Initialize a users dir
+ * Initialize a user's project directory
  */
-int gidit_user_init(FILE *fp, const char * basepath, unsigned int flags);
+int gidit_proj_init(FILE *fp, const char * basepath, unsigned int flags);
 
 /**
  * Read pushobj from fp and save, will need to take
