@@ -15,7 +15,7 @@
 #define END_SHA1 "0000000000000000000000000000000000000000"
 
 struct projdir {
-	char * basedir;
+	char * basepath;
 	int pgp_len;
 	unsigned char * pgp;
 	unsigned char pgp_sha1[20];
@@ -189,8 +189,8 @@ int gidit_init(const char *path)
 
 static void free_projdir(struct projdir* pd)
 {
-	if (pd->basedir)
-		free(pd->basedir);
+	if (pd->basepath)
+		free(pd->basepath);
 
 	if (pd->pgp)
 		free(pd->pgp);
@@ -276,26 +276,26 @@ static int init_projdir(struct projdir* pd)
 /**
  * Fill out projdir hash
  */
-static struct projdir* new_projdir(const char * basedir, const char * sha1_hex, 
+static struct projdir* new_projdir(const char * basepath, const char * sha1_hex, 
 		const char * projname)
 {
 	ssize_t bd_size;
 	struct projdir * pd = NULL;
 
 	pd = (struct projdir*)malloc(sizeof(struct projdir));
-	bd_size = strlen(basedir) + 1; 
+	bd_size = strlen(basepath) + 1; 
 
-	// Set basedir
-	pd->basedir = (char*)malloc(bd_size);
-	memcpy(pd->basedir, basedir, bd_size);
+	// Set basepath
+	pd->basepath = (char*)malloc(bd_size);
+	memcpy(pd->basepath, basepath, bd_size);
 
 	// convert given sha1_hex, to binary sha1
 	get_sha1_hex(sha1_hex, pd->pgp_sha1);
 
 	// set the users dir (sha1)
-	pd->userdir = (char*)malloc(strlen(basedir) + 1 + strlen(PUSHOBJ_DIR) + 1
+	pd->userdir = (char*)malloc(strlen(basepath) + 1 + strlen(PUSHOBJ_DIR) + 1
 								+ 40 + 1);
-	sprintf(pd->userdir, "%s/%s/%s", basedir, PUSHOBJ_DIR, sha1_hex);
+	sprintf(pd->userdir, "%s/%s/%s", basepath, PUSHOBJ_DIR, sha1_hex);
 
 	// set the project directory inside userdir
 	pd->projdir = (char*)malloc(strlen(pd->userdir) + strlen(projname) + 1);
