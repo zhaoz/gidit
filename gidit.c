@@ -638,7 +638,7 @@ int gidit_po_list(FILE *fp, const char * basepath, unsigned int flags)
 	return rc;
 }
 
-int store_bundle(FILE *fp, const char * basepath, unsigned int flags)
+int gidit_store_bundle(FILE *fp, const char * basepath, unsigned int flags)
 {
 	char start_pobj_sha1[41];
 	char end_pobj_sha1[41];
@@ -709,3 +709,4 @@ int store_bundle(FILE *fp, const char * basepath, unsigned int flags)
 
 	return 0;
 }
+

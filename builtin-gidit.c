@@ -50,7 +50,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 {
 	int flags = 0;
 	int tags = 0, init = 0, verbose = 0, pushobj = 0, updatepl = 0, sign = 0,
-		proj_init = 0, polist = 0, save_bundle = 0;
+		proj_init = 0, polist = 0, store_bundle = 0;
 
 	const char *basepath = NULL;
 	const char *keyid = NULL;
@@ -71,7 +71,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		OPT_BOOLEAN( 0 , "init", &init, "init gidit directory"),
 		OPT_BOOLEAN( 0 , "proj-init", &proj_init, "init user's gidit project directory"),
 		OPT_BOOLEAN( 0 , "polist", &polist, "Generate list of push objects"),
-		OPT_BOOLEAN( 0 , "save-bundle", &save_bundle, "save a given bundle"),
+		OPT_BOOLEAN( 0 , "store-bundle", &store_bundle, "store a given bundle"),
 		OPT_END()
 	};
 
@@ -110,8 +110,8 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		rc = base_path_test(basepath) || gidit_update_pl(stdin, basepath, flags);
 	else if (polist)
 		rc = base_path_test(basepath) || gidit_po_list(stdin, basepath, flags);
-	else if (save_bundle)
-		rc = base_path_test(basepath) || store_bundle(stdin, basepath, flags);
+	else if (store_bundle)
+		rc = base_path_test(basepath) || gidit_store_bundle(stdin, basepath, flags);
 	else
 		rc = -1;
 

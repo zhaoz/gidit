@@ -104,7 +104,7 @@ export POBJ_START_SHA1=`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/$POBJ_EN
 export BUNDLE_SHA1=`cat $TEST_DIRECTORY/t9800/bundle | sha1sum | head -c 40`
 
 test_expect_success 'bundle saving should work' '
-	(echo -n "$POBJ_START_SHA1$POBJ_END_SHA1" && cat $TEST_DIRECTORY/t9800/bundle) | git gidit --save-bundle -b $GIDIT_DIR &&
+	(echo -n "$POBJ_START_SHA1$POBJ_END_SHA1" && cat $TEST_DIRECTORY/t9800/bundle) | git gidit --store-bundle -b $GIDIT_DIR &&
 	test -e $GIDIT_DIR/bundles/$POBJ_START_SHA1/$POBJ_END_SHA1/BUNDLES &&
 	test -e $GIDIT_DIR/bundles/$POBJ_START_SHA1/$POBJ_END_SHA1/$BUNDLE_SHA1 &&
 	test `cat $GIDIT_DIR/bundles/$POBJ_START_SHA1/$POBJ_END_SHA1/BUNDLES` == $BUNDLE_SHA1
