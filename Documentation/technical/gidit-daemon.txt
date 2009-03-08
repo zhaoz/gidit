@@ -56,3 +56,9 @@ Client-Daemon Operations
 	be possible.
 
 
+. get-bundle
+	
+	Returns a given bundle. 
+
+	[SHA1 Pobj Start][SHA1 Pobj End]
+
