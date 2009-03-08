@@ -39,6 +39,52 @@ struct gidit_refs_cb_data {
 	unsigned int flags;
 };
 
+/**
+ * Success if directory does not exist yet and was able to create, or 
+ * already exists and is writable
+ * return's 0 on success
+ */
+static int safe_create_dir(const char *dir)
+{
+	int rc = 0;
+	if (mkdir(dir, 0777) < 0) {
+		if (errno != EEXIST) {
+			perror(dir);
+			rc = error("Error while making directory: %s", dir);
+		} else if (access(dir, W_OK)) {
+			rc = error("Unable to write to directory: %s", dir);
+		}
+	}
+
+	return rc;
+}
+
+
+static int read_sha1(FILE *fp, char * buf)
+{
+	if (fread(buf, 40, 1, fp) != 1)
+		return 0;
+
+	buf[40] = '\0';
+	return 1;
+}
+
+static int enter_bundle_dir(const char * basepath, const char *start_pobj_sha1,
+							const char * end_pobj_sha1)
+{
+	if (chdir(basepath) || chdir(BUNDLES_DIR))
+		return 0;
+
+	// ensure creation of start_pobj_sha1
+	if (safe_create_dir(start_pobj_sha1) || chdir(start_pobj_sha1))
+		return 0;
+		 
+	if (safe_create_dir(end_pobj_sha1) || chdir(end_pobj_sha1))
+		return 0;
+
+	return 1;
+}
+
 static int handle_one_ref(const char *path, const unsigned char *sha1,
 			  int flags, void *cb_data) {
 	struct gidit_refs_cb_data *cb = cb_data;
@@ -145,25 +191,6 @@ int gidit_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags)
 	return 0;
 }
 
-/**
- * Success if directory does not exist yet and was able to create, or 
- * already exists and is writable
- */
-static int safe_create_dir(const char *dir)
-{
-	int rc = 0;
-	if (mkdir(dir, 0777) < 0) {
-		if (errno != EEXIST) {
-			perror(dir);
-			rc = error("Error while making directory: %s", dir);
-		} else if (access(dir, W_OK)) {
-			rc = error("Unable to write to directory: %s", dir);
-		}
-	}
-
-	return rc;
-}
-
 static int safe_create_rel_dir(const char *base, const char *rel)
 {
 	char *full_path;
@@ -261,8 +288,8 @@ static int init_projdir(struct projdir* pd)
 		if (!fp) 
 			die("Error while looking up head revision");
 
-		len = fread(pd->head, 40, 1, fp);
-		pd->head[40] = '\0';
+		if (!read_sha1(fp, pd->head))
+			die("Error while reading sha1");
 	} else {
 		fp = fopen(path, "w");
 
@@ -383,11 +410,9 @@ int gidit_update_pl(FILE *fp, const char * basepath, unsigned int flags)
 	struct strbuf buf = STRBUF_INIT;
 	struct strbuf pobj = STRBUF_INIT;
 
-	if (fread(pgp_sha1, 40, 1, fp) != 1)
+	if (!read_sha1(fp, pgp_sha1))
 		return error("pgpkey error: bad pushobject format");
 	
-	pgp_sha1[40] = '\0';
-
 	// next line is the project name
 	if (strbuf_getline(&proj_name, fp, '\n') == EOF)
 		return error("No projname: bad pushobject format");
@@ -424,8 +449,6 @@ int gidit_update_pl(FILE *fp, const char * basepath, unsigned int flags)
 	strbuf_release(&proj_name);
 	strbuf_release(&pobj);
 	strbuf_release(&buf);
-
-	fclose(fp);
 
 	return rc;
 }
@@ -601,15 +624,12 @@ int gidit_po_list(FILE *fp, const char * basepath, unsigned int flags)
 	struct pushobj po = PO_INIT;
 	int rc = 0;
 
-	if (fread(pgp_sha1, 40, 1, fp) != 1)
+	if (!read_sha1(fp, pgp_sha1))
 		return error("pgpkey error: bad pushobject format");
-	pgp_sha1[40] = '\0';
 	
 	// next line is the project name
 	if (strbuf_getline(&proj_name, fp, '\n') == EOF)
 		return error("No projname: bad pushobject format");
-
-	fclose(fp);
 
 	pd = new_projdir(basepath, pgp_sha1, proj_name.buf);
 	if (!pd)
@@ -647,30 +667,11 @@ int gidit_store_bundle(FILE *fp, const char * basepath, unsigned int flags)
 	git_SHA_CTX c;
 	FILE * out;
 
-	if (fread(start_pobj_sha1, 40, 1, fp) != 1)
-		return error("protocol error: could not read start sha1");
+	if (!read_sha1(fp, start_pobj_sha1) || !read_sha1(fp, end_pobj_sha1))
+		return error("protocol error: could not read sha1");
 
-	start_pobj_sha1[40] = '\0';
-
-	if (fread(end_pobj_sha1, 40, 1, fp) != 1)
-		return error("protocol error: could not read end sha1");
-
-	end_pobj_sha1[40] = '\0';
-
-	if (chdir(basepath) || chdir(BUNDLES_DIR))
-		return error("gidit directory not initialized\n");
-	
-	// ensure creation of start_pobj_sha1
-	if (safe_create_dir(start_pobj_sha1))
-		exit(1);
-	
-	chdir(start_pobj_sha1);
-
-	// do the same for end_pobj_sha1
-	if (safe_create_dir(end_pobj_sha1))
-		exit(1);
-	
-	chdir(end_pobj_sha1);
+	if (!enter_bundle_dir(basepath, start_pobj_sha1, end_pobj_sha1))
+		return error("Failed to enter gidit pushobj dir");
 
 
 	// now we need to read in the bundle, and store it in it's own sha1
@@ -705,7 +706,6 @@ int gidit_store_bundle(FILE *fp, const char * basepath, unsigned int flags)
 	fprintf(out, "%s\n", sha1_to_hex(bundle_sha1));
 
 	fclose(out);
-
 
 	return 0;
 }
