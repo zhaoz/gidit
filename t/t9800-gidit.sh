@@ -99,6 +99,17 @@ test_expect_success 'polist should work for two objs' '
 	test `cat tmpfile | grep "BEGIN PGP" | wc -l` -eq 2
 '
 
+export POBJ_END_SHA1=`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD | head -c 40`
+export POBJ_START_SHA1=`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/$POBJ_END_SHA1 | tail -n 1 | head -c 40`
+export BUNDLE_SHA1=`cat $TEST_DIRECTORY/t9800/bundle | sha1sum | head -c 40`
+
+test_expect_success 'bundle saving should work' '
+	(echo -n "$POBJ_START_SHA1$POBJ_END_SHA1" && cat $TEST_DIRECTORY/t9800/bundle) | git gidit --save-bundle -b $GIDIT_DIR &&
+	test -e $GIDIT_DIR/bundles/$POBJ_START_SHA1/$POBJ_END_SHA1/BUNDLES &&
+	test -e $GIDIT_DIR/bundles/$POBJ_START_SHA1/$POBJ_END_SHA1/$BUNDLE_SHA1 &&
+	test `cat $GIDIT_DIR/bundles/$POBJ_START_SHA1/$POBJ_END_SHA1/BUNDLES` == $BUNDLE_SHA1
+'
+
 # clean up
 rm -rf $GIDIT_DIR
 

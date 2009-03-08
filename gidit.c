@@ -637,3 +637,75 @@ int gidit_po_list(FILE *fp, const char * basepath, unsigned int flags)
 
 	return rc;
 }
+
+int store_bundle(FILE *fp, const char * basepath, unsigned int flags)
+{
+	char start_pobj_sha1[41];
+	char end_pobj_sha1[41];
+	unsigned char bundle_sha1[20];
+	struct strbuf bundle = STRBUF_INIT;
+	git_SHA_CTX c;
+	FILE * out;
+
+	if (fread(start_pobj_sha1, 40, 1, fp) != 1)
+		return error("protocol error: could not read start sha1");
+
+	start_pobj_sha1[40] = '\0';
+
+	if (fread(end_pobj_sha1, 40, 1, fp) != 1)
+		return error("protocol error: could not read end sha1");
+
+	end_pobj_sha1[40] = '\0';
+
+	if (chdir(basepath) || chdir(BUNDLES_DIR))
+		return error("gidit directory not initialized\n");
+	
+	// ensure creation of start_pobj_sha1
+	if (safe_create_dir(start_pobj_sha1))
+		exit(1);
+	
+	chdir(start_pobj_sha1);
+
+	// do the same for end_pobj_sha1
+	if (safe_create_dir(end_pobj_sha1))
+		exit(1);
+	
+	chdir(end_pobj_sha1);
+
+
+	// now we need to read in the bundle, and store it in it's own sha1
+
+	strbuf_getline(&bundle, fp, EOF);
+	if (bundle.len == 0)
+		return error("Protocol error while reading bundle");
+
+	git_SHA1_Init(&c);
+	git_SHA1_Update(&c, bundle.buf, bundle.len);
+	git_SHA1_Final(bundle_sha1, &c);
+
+	out = fopen(sha1_to_hex(bundle_sha1), "w");
+
+	if (!out)
+		die("Error while writing bundle");
+
+	if (fwrite(bundle.buf, bundle.len, 1, out) != 1)
+		die("Error while writing to bundle");
+
+	fclose(out);
+
+	strbuf_release(&bundle);
+
+
+	// create BUNDLE file pointing to sha1
+	out = fopen("BUNDLES", "a");
+
+	if (!out)
+		die("Error while writing to BUNDLE");
+
+	fprintf(out, "%s\n", sha1_to_hex(bundle_sha1));
+
+	fclose(out);
+
+
+	return 0;
+}
