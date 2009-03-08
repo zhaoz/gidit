@@ -374,7 +374,7 @@ static int append_pushobj(struct projdir * pd, struct strbuf * pobj,
 	return 0;
 }
 
-int gidit_update_pl(FILE *fp, const char * base_dir, unsigned int flags)
+int gidit_update_pl(FILE *fp, const char * basepath, unsigned int flags)
 {
 	struct projdir * pd;
 	char pgp_sha1[41];
@@ -392,7 +392,7 @@ int gidit_update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 	if (strbuf_getline(&proj_name, fp, '\n') == EOF)
 		return error("No projname: bad pushobject format");
 
-	pd = new_projdir(base_dir, pgp_sha1, proj_name.buf);
+	pd = new_projdir(basepath, pgp_sha1, proj_name.buf);
 
 	if (!pd)
 		exit(1);
@@ -433,7 +433,7 @@ int gidit_update_pl(FILE *fp, const char * base_dir, unsigned int flags)
 /**
  * Initialize user directories, takes PGP
  */
-int gidit_proj_init(FILE *fp, const char * base_dir, unsigned int flags)
+int gidit_proj_init(FILE *fp, const char * basepath, unsigned int flags)
 {
 	FILE * pgp_fp;
 	struct strbuf pgp_key = STRBUF_INIT;
@@ -465,7 +465,7 @@ int gidit_proj_init(FILE *fp, const char * base_dir, unsigned int flags)
 
 
 	// change dir to pushobjects dir
-	if (chdir(base_dir) != 0 || chdir(PUSHOBJ_DIR) != 0) {
+	if (chdir(basepath) || chdir(PUSHOBJ_DIR)) {
 		return error("Error going to pushobjects directory\n");
 	}
 
