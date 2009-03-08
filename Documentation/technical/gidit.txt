@@ -45,7 +45,12 @@ of the two char SHA1 prefix, followed by a folder consisting of the
 rest of the SHA1 hash. The bundle would be stored inside of the folder 
 with the name of the end SHA1.
 
-./bundles/[Start SHA1 0..2]/[Start SHA1 2..20]/[End SHA1]
+./bundles/[PushObj Start SHA1]/[PushObj End SHA1]/[SHA1 of Bundle]
+
+A special file called BUNDLES will hold a pointer to the file, this is needed
+for security, slated for later. Under current implementation, it is trivial to 
+overwrite the bundle with a bad one. Future improvement invovles PGP signed
+bundles.
 
 
 PushObjects

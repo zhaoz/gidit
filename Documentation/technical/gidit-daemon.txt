@@ -43,3 +43,16 @@ Client-Daemon Operations
 	This can be invoked with:
 	echo -n <stuff> | git gidit --updatepl -b /var/gidit/
 
+. store-bundle
+	
+	Stores a given bundle. The bundle is preceded by the sha1 of the
+	pushobject it bases off of, and the sha1 of the pushobject it brings the
+	user to. Followed by the bundle.
+
+	[SHA1 Pobj Start][SHA1 Pobj End][Bundle]
+
+	This is slated to change due to security considerations. Bundles would
+	most likely need to be signed, and multiple bundles for same pobjs could
+	be possible.
+
+
