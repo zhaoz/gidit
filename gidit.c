@@ -32,6 +32,8 @@ struct pushobj {
 	char prev[41];
 };
 
+#define PO_INIT { 0, NULL, NULL, "\0" }
+
 struct gidit_refs_cb_data {
 	struct strbuf *buf;
 	unsigned int flags;
@@ -501,10 +503,18 @@ static void pobj_release(struct pushobj *po)
 	int ii;
 	for (ii = 0; ii < po->lines; ii++)
 		free(po->refs[ii]);
-	free(po->refs);
-	free(po->signature);
+
+	if (po->refs)
+		free(po->refs);
+	if (po->signature)
+		free(po->signature);
+	
+	po->lines = 0;
 }
 
+/**
+ * Given sha1, look up pushobj and return it
+ */
 static int sha_to_pobj(struct pushobj *po, const struct projdir *pd, 
 						const char * sha1)
 {
@@ -513,9 +523,10 @@ static int sha_to_pobj(struct pushobj *po, const struct projdir *pd,
 	char * path = NULL;
 	struct string_list list;
 	char * cbuf;
-	// struct string_list_item *it;
 	struct strbuf buf = STRBUF_INIT;
 	struct strbuf sig = STRBUF_INIT;
+
+	pobj_release(po);
 
 	if (strncmp(sha1, END_SHA1, 40) == 0)
 		die("Invalid sha1");
@@ -587,7 +598,7 @@ int gidit_po_list(FILE *fp, const char * basepath, unsigned int flags)
 	struct projdir * pd;
 	char pgp_sha1[41];
 	struct strbuf proj_name = STRBUF_INIT;
-	struct pushobj po;
+	struct pushobj po = PO_INIT;
 	int rc = 0;
 
 	if (fread(pgp_sha1, 40, 1, fp) != 1)
