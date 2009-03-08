@@ -110,6 +110,11 @@ test_expect_success 'bundle saving should work' '
 	test `cat $GIDIT_DIR/bundles/$POBJ_START_SHA1/$POBJ_END_SHA1/BUNDLES` == $BUNDLE_SHA1
 '
 
+test_expect_success 'get bundle should work' '
+	(echo -n "$POBJ_START_SHA1$POBJ_END_SHA1") | git gidit --get-bundle -b $GIDIT_DIR > tmp &&
+	cmp tmp $TEST_DIRECTORY/t9800/bundle
+'
+
 # clean up
 rm -rf $GIDIT_DIR
 

@@ -38,4 +38,9 @@ int gidit_po_list(FILE *fp, const char * basepath, unsigned int flags);
  */
 int gidit_store_bundle(FILE *fp, const char * basepath, unsigned int flags);
 
+/**
+ * get a bundle
+ */
+int gidit_get_bundle(FILE *fp,  FILE * out, const char * basepath, unsigned int flags);
+
 #endif		// GIDIT_H

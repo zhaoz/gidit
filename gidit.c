@@ -710,3 +710,38 @@ int gidit_store_bundle(FILE *fp, const char * basepath, unsigned int flags)
 	return 0;
 }
 
+int gidit_get_bundle(FILE *fp, FILE *out, const char *basepath, unsigned int flags)
+{
+	char start_pobj_sha1[41];
+	char end_pobj_sha1[41];
+	char bundle_sha1[41];
+	int ch;
+	FILE * f;
+
+	if (!read_sha1(fp, start_pobj_sha1) || !read_sha1(fp, end_pobj_sha1))
+		return error("protocol error: could not read sha1");
+
+	if (!enter_bundle_dir(basepath, start_pobj_sha1, end_pobj_sha1))
+		return error("Failed to enter gidit pushobj dir");
+	
+	// in the directory, attempt to retreive the file name and then dump it out to stdout
+	f = fopen("BUNDLES", "r");
+
+	if (!read_sha1(f, bundle_sha1))
+		die("Error reading from BUNDLES");
+	
+	fclose(f);
+
+	f = fopen(bundle_sha1, "r");
+
+	if (!f)
+		die("Error getting bundle");
+	
+	while ((ch = fgetc(f)) != EOF)
+		fputc(ch, out);
+	
+
+	fclose(f);
+
+	return 0;
+}
