@@ -102,7 +102,6 @@ static void test_fwd (Key ** kp, Message ** mp, ChimeraHost ** hp)
 {
 	Key *k = *kp;
 	Message *m = *mp;
-	ChimeraHost *h = *hp;
 	chat_message message;
 	message = *((chat_message *)m->payload);
 
@@ -172,6 +171,7 @@ static void gidit_daemon_init(char * bootstrap_addr, int bootstrap_port, int loc
 	chimera_update (chimera_state, test_update);
 	chimera_setkey (chimera_state, key);
 	chimera_register (chimera_state, TEST_CHAT, 1);
+	chimera_register (chimera_state, RETURN_CHAT, 1);
 	chimera_join(chimera_state, host);
 }
 
