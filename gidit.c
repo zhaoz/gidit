@@ -39,6 +39,20 @@ struct gidit_refs_cb_data {
 	unsigned int flags;
 };
 
+static void pobj_release(struct pushobj *po)
+{
+	int ii;
+	for (ii = 0; ii < po->lines; ii++)
+		free(po->refs[ii]);
+
+	if (po->refs)
+		free(po->refs);
+	if (po->signature)
+		free(po->signature);
+	
+	po->lines = 0;
+}
+
 /**
  * Success if directory does not exist yet and was able to create, or 
  * already exists and is writable
@@ -85,8 +99,9 @@ static int enter_bundle_dir(const char * basepath, const char *start_pobj_sha1,
 	return 1;
 }
 
-static int handle_one_ref(const char *path, const unsigned char *sha1,
-			  int flags, void *cb_data) {
+static int resolve_one_ref(const char *path, const unsigned char *sha1,
+			  int flags, void *cb_data)
+{
 	struct gidit_refs_cb_data *cb = cb_data;
 	int is_tag_ref;
 
@@ -110,7 +125,11 @@ static int handle_one_ref(const char *path, const unsigned char *sha1,
 	return 0;
 }
 
-static int do_sign(struct strbuf *buffer, char * signingkey) {
+/**
+ * Sign buffer
+ */
+static int do_sign(struct strbuf *buffer, char * signingkey)
+{
 	struct child_process gpg;
 	const char *args[4];
 	int len;
@@ -157,69 +176,6 @@ static int do_sign(struct strbuf *buffer, char * signingkey) {
 	return 0;
 }
 
-int gidit_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags)
-{
-	const char *head;
-	unsigned char head_sha1[21];
-	struct gidit_refs_cb_data cbdata;
-	struct strbuf buf = STRBUF_INIT;
-
-	cbdata.buf = &buf;
-	cbdata.flags = flags;
-
-	head = resolve_ref("HEAD", head_sha1, 0, NULL);
-	head_sha1[20] = '\0';
-	if (!head) {
-		strbuf_release(&buf);
-		return error("Failed to resolve HEAD as a valid ref.");
-	}
-	
-	strbuf_add(&buf, sha1_to_hex(head_sha1), 40);
-	strbuf_addstr(&buf, " HEAD\n");
-
-	for_each_ref(handle_one_ref, &cbdata);
-
-	if (sign)
-		do_sign(&buf, signingkey);
-
-	if (fwrite(buf.buf, buf.len, 1, fp) != 1) {
-		strbuf_release(&buf);
-		return error("Error while writing pushobj");
-	}
-
-	strbuf_release(&buf);
-	return 0;
-}
-
-static int safe_create_rel_dir(const char *base, const char *rel)
-{
-	char *full_path;
-	int rc = 0;
-	full_path = (char*)malloc(strlen(base) + strlen(rel) + 2);
-	sprintf(full_path, "%s/%s", base, rel);
-	rc = safe_create_dir(full_path);
-	free(full_path);
-	return rc;
-}
-
-/**
- * initialize a given directory
- */
-int gidit_init(const char *path)
-{
-	int rc = 0;
-	if ((rc = safe_create_dir(path)))
-		return rc;
-
-	// create these dirs if they don't exist
-	if ((rc = safe_create_rel_dir(path, BUNDLES_DIR)) == 0 && 
-		(rc = safe_create_rel_dir(path, PUSHOBJ_DIR)) == 0) {
-		return 0;
-	}
-
-	return rc;
-}
-
 static void free_projdir(struct projdir* pd)
 {
 	if (pd->basepath)
@@ -238,6 +194,14 @@ static void free_projdir(struct projdir* pd)
 		free(pd->projname);
 
 	free(pd);
+}
+
+static void print_pobj(FILE * fp, struct pushobj *po)
+{
+	int ii;
+	for (ii = 0; ii < po->lines; ii++)
+		fprintf(fp, "%s\n", po->refs[ii]);
+	fprintf(fp, "%s", po->signature);
 }
 
 /**
@@ -304,6 +268,61 @@ static int init_projdir(struct projdir* pd)
 	fclose(fp);
 
 	return 0;
+}
+
+
+int gidit_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags)
+{
+	const char *head;
+	unsigned char head_sha1[21];
+	struct gidit_refs_cb_data cbdata;
+	struct strbuf buf = STRBUF_INIT;
+
+	cbdata.buf = &buf;
+	cbdata.flags = flags;
+
+	head = resolve_ref("HEAD", head_sha1, 0, NULL);
+	head_sha1[20] = '\0';
+	if (!head) {
+		strbuf_release(&buf);
+		return error("Failed to resolve HEAD as a valid ref.");
+	}
+	
+	strbuf_add(&buf, sha1_to_hex(head_sha1), 40);
+	strbuf_addstr(&buf, " HEAD\n");
+
+	for_each_ref(resolve_one_ref, &cbdata);
+
+	if (sign)
+		do_sign(&buf, signingkey);
+
+	if (fwrite(buf.buf, buf.len, 1, fp) != 1) {
+		strbuf_release(&buf);
+		return error("Error while writing pushobj");
+	}
+
+	strbuf_release(&buf);
+	return 0;
+}
+
+/**
+ * initialize a given directory
+ */
+int gidit_init(const char *path)
+{
+	int rc = 0;
+	if ((rc = safe_create_dir(path)))
+		return rc;
+
+	chdir(path);
+
+	// create these dirs if they don't exist
+	if ((rc = safe_create_dir(BUNDLES_DIR)) == 0 && 
+		(rc = safe_create_dir(PUSHOBJ_DIR)) == 0) {
+		return 0;
+	}
+
+	return rc;
 }
 
 /**
@@ -401,140 +420,6 @@ static int append_pushobj(struct projdir * pd, struct strbuf * pobj,
 	return 0;
 }
 
-int gidit_update_pl(FILE *fp, const char * basepath, unsigned int flags)
-{
-	struct projdir * pd;
-	char pgp_sha1[41];
-	int ch = 0, rc = 0;
-	struct strbuf proj_name = STRBUF_INIT;
-	struct strbuf buf = STRBUF_INIT;
-	struct strbuf pobj = STRBUF_INIT;
-
-	if (!read_sha1(fp, pgp_sha1))
-		return error("pgpkey error: bad pushobject format");
-	
-	// next line is the project name
-	if (strbuf_getline(&proj_name, fp, '\n') == EOF)
-		return error("No projname: bad pushobject format");
-
-	pd = new_projdir(basepath, pgp_sha1, proj_name.buf);
-
-	if (!pd)
-		exit(1);
-
-	while (strbuf_getline(&buf, fp, '\n') != EOF) {
-		if (strncmp(buf.buf, PGP_SIGNATURE, strlen(PGP_SIGNATURE)) == 0) {
-			strbuf_addstr(&buf, "\n");
-			break;
-		}
-		strbuf_addstr(&pobj, buf.buf);
-		strbuf_addstr(&pobj, "\n");
-	}
-
-	if (!buf.len)
-		return error("no pushobject given");
-
-	// rest of the stuff is sig stuff
-	while ((ch = fgetc(fp)) != EOF) {
-		strbuf_grow(&buf, 1);
-		buf.buf[buf.len++] = ch;
-		buf.buf[buf.len] = '\0';
-	}
-
-	if (!(rc = append_pushobj(pd, &pobj, &buf))) {
-		return rc;
-	}
-
-	free_projdir(pd);
-	strbuf_release(&proj_name);
-	strbuf_release(&pobj);
-	strbuf_release(&buf);
-
-	return rc;
-}
-
-/**
- * Initialize user directories, takes PGP
- */
-int gidit_proj_init(FILE *fp, const char * basepath, unsigned int flags)
-{
-	FILE * pgp_fp;
-	struct strbuf pgp_key = STRBUF_INIT;
-	struct strbuf proj_name = STRBUF_INIT;
-	unsigned char sha1[20];
-	char pgp_sha1[41];
-	git_SHA_CTX c;
-
-	strbuf_getline(&proj_name, fp, '\n');
-
-	if (proj_name.len == 0) {
-		strbuf_release(&pgp_key);
-		strbuf_release(&proj_name);
-		return error("Error while reading project name\n");
-	}
-
-	strbuf_getline(&pgp_key, fp, EOF);
-
-	if (pgp_key.len == 0) {
-		strbuf_release(&pgp_key);
-		strbuf_release(&proj_name);
-		return error("Error while reading pgp_key");
-	}
-
-	// hash the pgp key
-	git_SHA1_Init(&c);
-	git_SHA1_Update(&c, pgp_key.buf, pgp_key.len);
-	git_SHA1_Final(sha1, &c);
-
-
-	// change dir to pushobjects dir
-	if (chdir(basepath) || chdir(PUSHOBJ_DIR)) {
-		return error("Error going to pushobjects directory\n");
-	}
-
-	sprintf(pgp_sha1, "%s", sha1_to_hex(sha1));
-
-	if (safe_create_dir(pgp_sha1))
-		exit(1);
-
-	chdir(pgp_sha1);
-
-	// now ensure the project directories existence
-	if (safe_create_dir(proj_name.buf))
-		exit(1);
-
-	// if pgp key file already exists, not need to resave
-	if (access("PGP", F_OK)) {
-		// save the PGP key in there
-		pgp_fp = fopen("PGP", "w");
-
-		if (!pgp_fp)
-			die("Error while saving PGP key");
-
-		fwrite(pgp_key.buf, pgp_key.len, 1, pgp_fp);
-
-		fclose(pgp_fp);
-	}
-	strbuf_release(&pgp_key);
-	strbuf_release(&proj_name);
-
-	return 0;
-}
-
-static void pobj_release(struct pushobj *po)
-{
-	int ii;
-	for (ii = 0; ii < po->lines; ii++)
-		free(po->refs[ii]);
-
-	if (po->refs)
-		free(po->refs);
-	if (po->signature)
-		free(po->signature);
-	
-	po->lines = 0;
-}
-
 /**
  * Given sha1, look up pushobj and return it
  */
@@ -608,12 +493,120 @@ static int sha_to_pobj(struct pushobj *po, const struct projdir *pd,
 	return 0;
 }
 
-static void print_pobj(struct pushobj *po)
+int gidit_update_pl(FILE *fp, const char * basepath, unsigned int flags)
 {
-	int ii;
-	for (ii = 0; ii < po->lines; ii++)
-		printf("%s\n", po->refs[ii]);
-	printf("%s", po->signature);
+	struct projdir * pd;
+	char pgp_sha1[41];
+	int ch = 0, rc = 0;
+	struct strbuf proj_name = STRBUF_INIT;
+	struct strbuf buf = STRBUF_INIT;
+	struct strbuf pobj = STRBUF_INIT;
+
+	if (!read_sha1(fp, pgp_sha1))
+		return error("pgpkey error: bad pushobject format");
+	
+	// next line is the project name
+	if (strbuf_getline(&proj_name, fp, '\n') == EOF)
+		return error("No projname: bad pushobject format");
+
+	pd = new_projdir(basepath, pgp_sha1, proj_name.buf);
+
+	if (!pd)
+		exit(1);
+
+	while (strbuf_getline(&buf, fp, '\n') != EOF) {
+		strbuf_addstr(&buf, "\n");
+		if (strncmp(buf.buf, PGP_SIGNATURE, strlen(PGP_SIGNATURE)) == 0)
+			break;
+		strbuf_addstr(&pobj, buf.buf);
+	}
+
+	if (!buf.len)
+		return error("no pushobject given");
+
+	// rest of the stuff is sig stuff
+	while ((ch = fgetc(fp)) != EOF) {
+		strbuf_grow(&buf, 1);
+		buf.buf[buf.len++] = ch;
+		buf.buf[buf.len] = '\0';
+	}
+
+	if (!(rc = append_pushobj(pd, &pobj, &buf)))
+		return rc;
+
+	free_projdir(pd);
+	strbuf_release(&proj_name);
+	strbuf_release(&pobj);
+	strbuf_release(&buf);
+
+	return rc;
+}
+
+/**
+ * Initialize user directories, takes PGP
+ */
+int gidit_proj_init(FILE *fp, const char * basepath, unsigned int flags)
+{
+	FILE * pgp_fp;
+	struct strbuf pgp_key = STRBUF_INIT;
+	struct strbuf proj_name = STRBUF_INIT;
+	unsigned char sha1[20];
+	char pgp_sha1[41];
+	git_SHA_CTX c;
+
+	strbuf_getline(&proj_name, fp, '\n');
+
+	if (proj_name.len == 0) {
+		strbuf_release(&pgp_key);
+		strbuf_release(&proj_name);
+		return error("Error while reading project name\n");
+	}
+
+	strbuf_getline(&pgp_key, fp, EOF);
+
+	if (pgp_key.len == 0) {
+		strbuf_release(&pgp_key);
+		strbuf_release(&proj_name);
+		return error("Error while reading pgp_key");
+	}
+
+	// hash the pgp key
+	git_SHA1_Init(&c);
+	git_SHA1_Update(&c, pgp_key.buf, pgp_key.len);
+	git_SHA1_Final(sha1, &c);
+
+
+	// change dir to pushobjects dir
+	if (chdir(basepath) || chdir(PUSHOBJ_DIR))
+		return error("Error going to pushobjects directory\n");
+
+	sprintf(pgp_sha1, "%s", sha1_to_hex(sha1));
+
+	if (safe_create_dir(pgp_sha1))
+		exit(1);
+
+	chdir(pgp_sha1);
+
+	// now ensure the project directories existence
+	if (safe_create_dir(proj_name.buf))
+		exit(1);
+
+	// if pgp key file already exists, not need to resave
+	if (access("PGP", F_OK)) {
+		// save the PGP key in there
+		pgp_fp = fopen("PGP", "w");
+
+		if (!pgp_fp)
+			die("Error while saving PGP key");
+
+		fwrite(pgp_key.buf, pgp_key.len, 1, pgp_fp);
+
+		fclose(pgp_fp);
+	}
+	strbuf_release(&pgp_key);
+	strbuf_release(&proj_name);
+
+	return 0;
 }
 
 int gidit_po_list(FILE *fp, const char * basepath, unsigned int flags)
@@ -642,11 +635,11 @@ int gidit_po_list(FILE *fp, const char * basepath, unsigned int flags)
 	if ((rc = sha_to_pobj(&po, pd, pd->head)) != 0)
 		die("Failed pushobjlist generation");
 	
-	print_pobj(&po);
+	print_pobj(stdout, &po);
 
 	while (strncmp(po.prev, END_SHA1, 40) != 0 &&
 			(rc = sha_to_pobj(&po, pd, po.prev)) == 0) {
-		print_pobj(&po);
+		print_pobj(stdout, &po);
 	}
 
 	if (rc)
@@ -695,7 +688,6 @@ int gidit_store_bundle(FILE *fp, const char * basepath, unsigned int flags)
 	fclose(out);
 
 	strbuf_release(&bundle);
-
 
 	// create BUNDLE file pointing to sha1
 	out = fopen("BUNDLES", "a");
