@@ -421,32 +421,19 @@ static int append_pushobj(struct projdir * pd, struct strbuf * pobj,
 }
 
 /**
- * Given sha1, look up pushobj and return it
+ * Given a fd
  */
-static int sha_to_pobj(struct pushobj *po, const struct projdir *pd, 
-						const char * sha1)
+static int read_pobj(FILE * fp, struct pushobj *po)
 {
-	FILE * fp;
 	int ii;
-	char * path = NULL;
-	struct string_list list;
-	char * cbuf;
+	char * cbuf = NULL;
 	struct strbuf buf = STRBUF_INIT;
 	struct strbuf sig = STRBUF_INIT;
+	struct string_list list;
 
 	pobj_release(po);
 
-	if (strncmp(sha1, END_SHA1, 40) == 0)
-		die("Invalid sha1");
-
 	memset(&list, 0, sizeof(struct string_list));
-
-	path = malloc(strlen(pd->projdir) + 1 + 40 + 1);
-	sprintf(path, "%s/%s", pd->projdir, sha1);
-
-	fp = fopen(path, "r");
-	if (!fp)
-		return error("Could not open pushobj");
 
 	while (strbuf_getline(&buf, fp, '\n') != EOF) {
 		if (strncmp(buf.buf, PGP_SIGNATURE, strlen(PGP_SIGNATURE)) == 0)
@@ -476,19 +463,47 @@ static int sha_to_pobj(struct pushobj *po, const struct projdir *pd,
 	po->signature = (char*)malloc(sig.len);
 	strcpy(po->signature, sig.buf);
 
-	free(path);
+	memset(po->prev, 0, 40);
+	
+	// now the rest of the stuff is the prev pointer
+	if (strbuf_getline(&buf, fp, '\n') != EOF) {
+		strncpy(po->prev, buf.buf, 40);
+		po->prev[40] = '\0';
+	}
+
 	strbuf_release(&buf);
 	strbuf_release(&sig);
 	string_list_clear(&list, 0);
 
-	// now the rest of the stuff is the prev pointer
-	if (strbuf_getline(&buf, fp, '\n') == EOF) 
-		return error("Could not get prev pointer");
+	return 1;
+}
 
-	strncpy(po->prev, buf.buf, 40);
-	po->prev[40] = '\0';
+/**
+ * Given sha1, look up pushobj and return it
+ */
+static int sha_to_pobj(struct pushobj *po, const struct projdir *pd, 
+						const char * sha1)
+{
+	FILE * fp;
+	char * path = NULL;
 
-	strbuf_release(&buf);
+	if (strncmp(sha1, END_SHA1, 40) == 0)
+		die("Invalid sha1");
+
+	path = malloc(strlen(pd->projdir) + 1 + 40 + 1);
+	sprintf(path, "%s/%s", pd->projdir, sha1);
+
+	fp = fopen(path, "r");
+	free(path);
+	if (!fp)
+		return error("Could not open pushobj");
+	
+	read_pobj(fp, po);
+
+	if (!po->prev)
+		return error("No previous pointer in pushobject");
+
+	fclose(fp);
 
 	return 0;
 }
@@ -638,9 +653,8 @@ int gidit_po_list(FILE *fp, const char * basepath, unsigned int flags)
 	print_pobj(stdout, &po);
 
 	while (strncmp(po.prev, END_SHA1, 40) != 0 &&
-			(rc = sha_to_pobj(&po, pd, po.prev)) == 0) {
+			(rc = sha_to_pobj(&po, pd, po.prev)) == 0)
 		print_pobj(stdout, &po);
-	}
 
 	if (rc)
 		die("Error during pushobjlist generation");
