@@ -35,6 +35,9 @@ static int git_gidit_config(const char *var, const char *value, void *cb)
 	return git_default_config(var, value, cb);
 }
 
+/**
+ * Test basepath existence and is absolute
+ */
 static int base_path_test(const char * basepath)
 {
 	if (!basepath) {
@@ -97,26 +100,28 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 	if (tags)
 		flags |= INCLUDE_TAGS;
 
-	if (basepath) {
-		rc = base_path_test(basepath);
-		if (rc)
-			return rc;
-	}
+
+	if (pushobj)
+		return !!gidit_pushobj(stdout, signingkey, sign, flags);
+
+	if (!basepath)
+		usage_with_options(gidit_usage, options);
+
+	if (base_path_test(basepath))
+		return -1;
 
 	if (init)
 		rc = gidit_init(basepath);
 	else if (proj_init)
-		rc = base_path_test(basepath) || gidit_proj_init(stdin, basepath, flags);
-	else if (pushobj)
-		rc = gidit_pushobj(stdout, signingkey, sign, flags);
+		rc = gidit_proj_init(stdin, basepath, flags);
 	else if (updatepl)
-		rc = base_path_test(basepath) || gidit_update_pl(stdin, basepath, flags);
+		rc = gidit_update_pl(stdin, basepath, flags);
 	else if (polist)
-		rc = base_path_test(basepath) || gidit_po_list(stdin, basepath, flags);
+		rc = gidit_po_list(stdin, basepath, flags);
 	else if (store_bundle)
-		rc = base_path_test(basepath) || gidit_store_bundle(stdin, basepath, flags);
+		rc = gidit_store_bundle(stdin, basepath, flags);
 	else if (get_bundle)
-		rc = base_path_test(basepath) || gidit_get_bundle(stdin, stdout, basepath, flags);
+		rc = gidit_get_bundle(stdin, stdout, basepath, flags);
 	else
 		rc = -1;
 
