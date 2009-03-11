@@ -120,6 +120,10 @@ test_expect_success 'get bundle should work' '
 	cmp tmp $TEST_DIRECTORY/t9800/bundle
 '
 
+test_expect_failure 'verify pushobject should work' '
+	cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD` | git gidit --verify-pobj
+'
+
 # clean up
 rm -rf $GIDIT_DIR
 
