@@ -29,6 +29,7 @@ struct pushobj {
 	int lines;
 	char ** refs;
 	char * signature;
+	char head[41];
 	char prev[41];
 };
 
@@ -199,6 +200,7 @@ static void free_projdir(struct projdir* pd)
 static void print_pobj(FILE * fp, struct pushobj *po)
 {
 	int ii;
+	fprintf(fp, "%s HEAD\n", po->head);
 	for (ii = 0; ii < po->lines; ii++)
 		fprintf(fp, "%s\n", po->refs[ii]);
 	fprintf(fp, "%s", po->signature);
@@ -438,10 +440,21 @@ static int read_pobj(FILE * fp, struct pushobj *po)
 	while (strbuf_getline(&buf, fp, '\n') != EOF) {
 		if (strncmp(buf.buf, PGP_SIGNATURE, strlen(PGP_SIGNATURE)) == 0)
 			break;
+
+		// check to see if this is the HEAD ref
+		if (strncmp(buf.buf + 41, "HEAD", 4) == 0) {
+			strncpy(buf.buf, po->head, 41);
+			continue;
+		}
+
 		cbuf = (char*)malloc(buf.len);
 		strcpy(cbuf, buf.buf);
 		string_list_append(cbuf, &list);
 	}
+
+	if (!po->head)
+		die("pushobject did not contain HEAD ref");
+
 
 	po->lines = list.nr;
 	po->refs = (char**)malloc(sizeof(char*) * list.nr);

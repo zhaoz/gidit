@@ -94,9 +94,14 @@ test_expect_success 'Second PushObject update should work' '
 	test `ls $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME | wc -l` -eq 3
 '
 
+test_expect_success 'Saved PushObject should have HEAD ref' '
+	test `cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/\`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD\` | grep HEAD | wc -l` -eq 1
+'
+
 test_expect_success 'polist should work for two objs' '
 	(echo -n "$PGP_SHA1$PROJ_NAME") | git gidit --polist -b $GIDIT_DIR > tmpfile &&
-	test `cat tmpfile | grep "BEGIN PGP" | wc -l` -eq 2
+	test `cat tmpfile | grep "BEGIN PGP" | wc -l` -eq 2 &&
+	test `cat tmpfile | grep "HEAD" | wc -l` -eq 2
 '
 
 export POBJ_END_SHA1=`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD | head -c 40`
