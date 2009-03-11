@@ -43,4 +43,9 @@ int gidit_store_bundle(FILE *fp, const char * basepath, unsigned int flags);
  */
 int gidit_get_bundle(FILE *fp,  FILE * out, const char * basepath, unsigned int flags);
 
+/**
+ * Verify if a pushobject would apply cleanly to repo
+ */
+int gidit_verify_pushobj(FILE *fp, unsigned int flags);
+
 #endif		// GIDIT_H

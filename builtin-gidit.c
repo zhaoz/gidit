@@ -20,6 +20,7 @@ static const char * const gidit_usage[] = {
 	"echo <PGPSHA1><proj> | git gidit -b <base-path> --polist",
 	"echo <SHA1 Pobj Start><SHA1 Pobj End> | git gidit -b <base-path> --get-bundle",
 	"echo <SHA1 Pobj Start><SHA1 Pobj End><bundle> | git gidit -b <base-path> --store-bundle",
+	"echo <pushobj> | git gidit --verify-pobj",
 	NULL,
 };
 
@@ -55,7 +56,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 {
 	int flags = 0;
 	int tags = 0, init = 0, verbose = 0, pushobj = 0, updatepl = 0, sign = 0,
-		proj_init = 0, polist = 0, store_bundle = 0, get_bundle = 0;
+		proj_init = 0, polist = 0, store_bundle = 0, get_bundle = 0, pobj_val = 0;
 
 	const char *basepath = NULL;
 	const char *keyid = NULL;
@@ -70,6 +71,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		OPT_STRING('u', NULL, &keyid, "key-id",
 					"use another key to sign the tag"),
 		OPT_BOOLEAN( 0 , "pushobj", &pushobj, "generate push object"),
+		OPT_BOOLEAN( 0 , "verify-pobj", &pobj_val, "validate a given pushobject"),
 		OPT_GROUP(""),
 		OPT_BOOLEAN( 0 , "updatepl", &updatepl, "Update push list"),
 		OPT_STRING('b', NULL, &basepath, "base-path", "base-path for daemon"),
@@ -103,6 +105,8 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 
 	if (pushobj)
 		return !!gidit_pushobj(stdout, signingkey, sign, flags);
+	else if (pobj_val)
+		return !!gidit_verify_pushobj(stdin, flags);
 
 	if (!basepath)
 		usage_with_options(gidit_usage, options);

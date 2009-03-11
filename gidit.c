@@ -9,6 +9,7 @@
 #include "remote.h"
 #include "strbuf.h"
 #include "transport.h"
+#include "commit.h"
 #include "pgp.h"
 #include "gidit.h"
 
@@ -423,11 +424,12 @@ static int append_pushobj(struct projdir * pd, struct strbuf * pobj,
 }
 
 /**
- * Given a fd
+ * Given a fd, read stuff into pushobj
  */
 static int read_pobj(FILE * fp, struct pushobj *po)
 {
 	int ii;
+	int head = 0;
 	char * cbuf = NULL;
 	struct strbuf buf = STRBUF_INIT;
 	struct strbuf sig = STRBUF_INIT;
@@ -436,6 +438,7 @@ static int read_pobj(FILE * fp, struct pushobj *po)
 	pobj_release(po);
 
 	memset(&list, 0, sizeof(struct string_list));
+	memset(po->head, 0, 40);
 
 	while (strbuf_getline(&buf, fp, '\n') != EOF) {
 		if (strncmp(buf.buf, PGP_SIGNATURE, strlen(PGP_SIGNATURE)) == 0)
@@ -443,7 +446,8 @@ static int read_pobj(FILE * fp, struct pushobj *po)
 
 		// check to see if this is the HEAD ref
 		if (strncmp(buf.buf + 41, "HEAD", 4) == 0) {
-			strncpy(buf.buf, po->head, 41);
+			strncpy(po->head, buf.buf, 40);
+			head = 1;
 			continue;
 		}
 
@@ -452,10 +456,9 @@ static int read_pobj(FILE * fp, struct pushobj *po)
 		string_list_append(cbuf, &list);
 	}
 
-	if (!po->head)
+	if (!head)
 		die("pushobject did not contain HEAD ref");
-
-
+	
 	po->lines = list.nr;
 	po->refs = (char**)malloc(sizeof(char*) * list.nr);
 
@@ -761,6 +764,38 @@ int gidit_get_bundle(FILE *fp, FILE *out, const char *basepath, unsigned int fla
 	
 
 	fclose(f);
+
+	return 0;
+}
+
+int gidit_verify_pushobj(FILE *fp, unsigned int flags)
+{
+	int ii;
+	const char * prefix = NULL;
+	struct pushobj po = PO_INIT;
+	struct commit * cm = NULL;
+	unsigned char sha1[20];
+
+	prefix = setup_git_directory();
+
+	read_pobj(fp, &po);
+
+	get_sha1_hex(po.head, sha1);
+
+	// for each ref, verify its existence
+	cm = lookup_commit_reference_gently(sha1, 1);
+	if (!cm)
+		die("Failed verification");
+	
+	for (ii = 0; ii < po.lines; ++ii) {
+		get_sha1_hex(po.refs[ii], sha1);
+		if (!lookup_commit_reference_gently(sha1, 1))
+			die("Failed verification");
+		else
+			printf("got %s\n", po.refs[ii]);
+	}
+	
+	pobj_release(&po);
 
 	return 0;
 }

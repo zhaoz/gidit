@@ -14,6 +14,11 @@ export PROJ_NAME="test"
 
 test -e $GIDIT_DIR && rm -r $GIDIT_DIR
 
+# some commits to start it off
+echo "stuff" > tmp
+git add tmp
+git commit -a -m "added tmp"
+
 test_expect_success 'init gidit directory should succeed' '
 	git gidit --init -b $GIDIT_DIR && 
 	test -e $GIDIT_DIR &&
@@ -120,8 +125,12 @@ test_expect_success 'get bundle should work' '
 	cmp tmp $TEST_DIRECTORY/t9800/bundle
 '
 
-test_expect_failure 'verify pushobject should work' '
+test_expect_success 'verify pushobject should work' '
 	cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD` | git gidit --verify-pobj
+'
+
+test_expect_code 128 'verify pushobject with bad ref should fail' '
+	(echo "000000000AB1F000000000000000000000000000 fake" && cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD`) | git gidit --verify-pobj 
 '
 
 # clean up
