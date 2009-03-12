@@ -17,7 +17,7 @@ test -e $GIDIT_DIR && rm -r $GIDIT_DIR
 # some commits to start it off
 echo "stuff" > tmp
 git add tmp
-git commit -a -m "added tmp"
+git commit -m "added tmp"
 
 test_expect_success 'init gidit directory should succeed' '
 	git gidit --init -b $GIDIT_DIR && 
@@ -27,10 +27,9 @@ test_expect_success 'init gidit directory should succeed' '
 '
 
 test_expect_success 'pushobject generation should work, unsigned' '
-	git gidit --pushobj &&
+	git gidit --pushobj -s > pobj1 &&
 	git gidit --pushobj --tags
 '
-
 
 test_expect_success 'userdir not inited, should not be able to updatepl' '
 	(cat $TEST_DIRECTORY/t9800/pgp_sha1 && echo "$PROJ_NAME" && cat $TEST_DIRECTORY/t9800/pushobj) | git gidit --updatepl -b $GIDIT_DIR; 
@@ -131,6 +130,26 @@ test_expect_success 'verify pushobject should work' '
 
 test_expect_code 128 'verify pushobject with bad ref should fail' '
 	(echo "000000000AB1F000000000000000000000000000 fake" && cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD`) | git gidit --verify-pobj 
+'
+
+
+test_expect_success 'second pobj creation should work' '
+	echo "stuff" > tmp2 &&
+	git add tmp2 &&
+	git commit -m "added tmp2" &&
+	echo "hello" >> tmp &&
+	git commit -a -m "another update" &&
+	git gidit --pushobj -s > pobj2
+'
+
+test_expect_code 1 'second pobj should be different from first' '
+	cmp pobj1 pobj2 -s
+'
+
+test_expect_success 'bundle gen from pushobjects should succeed' '
+	echo "stuff2" >> tmp2 &&
+	git commit -a -m "up" &&
+	(cat pobj2) | git gidit --create-bundle 
 '
 
 # clean up

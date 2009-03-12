@@ -56,7 +56,8 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 {
 	int flags = 0;
 	int tags = 0, init = 0, verbose = 0, pushobj = 0, updatepl = 0, sign = 0,
-		proj_init = 0, polist = 0, store_bundle = 0, get_bundle = 0, pobj_val = 0;
+		proj_init = 0, polist = 0, store_bundle = 0, get_bundle = 0, pobj_val = 0,
+		create_bundle = 0;
 
 	const char *basepath = NULL;
 	const char *keyid = NULL;
@@ -72,6 +73,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 					"use another key to sign the tag"),
 		OPT_BOOLEAN( 0 , "pushobj", &pushobj, "generate push object"),
 		OPT_BOOLEAN( 0 , "verify-pobj", &pobj_val, "validate a given pushobject"),
+		OPT_BOOLEAN( 0 , "create-bundle", &create_bundle, "validate a given pushobject"),
 		OPT_GROUP(""),
 		OPT_BOOLEAN( 0 , "updatepl", &updatepl, "Update push list"),
 		OPT_STRING('b', NULL, &basepath, "base-path", "base-path for daemon"),
@@ -107,6 +109,8 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		return !!gidit_pushobj(stdout, signingkey, sign, flags);
 	else if (pobj_val)
 		return !!gidit_verify_pushobj(stdin, flags);
+	else if (create_bundle)
+		return !!gidit_gen_bundle(stdin, flags);
 
 	if (!basepath)
 		usage_with_options(gidit_usage, options);

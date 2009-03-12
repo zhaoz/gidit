@@ -48,4 +48,9 @@ int gidit_get_bundle(FILE *fp,  FILE * out, const char * basepath, unsigned int 
  */
 int gidit_verify_pushobj(FILE *fp, unsigned int flags);
 
+/**
+ * Generate a bundle read from stdin
+ */
+int gidit_gen_bundle(FILE *fp, unsigned int flags);
+
 #endif		// GIDIT_H

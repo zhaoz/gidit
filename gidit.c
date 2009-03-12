@@ -806,8 +806,44 @@ int gidit_verify_pushobj(FILE *fp, unsigned int flags)
 
 	return rc;
 }
+
+int gidit_gen_bundle(FILE *fp, unsigned int flags)
+{
+	unsigned char head_sha1[20];
+	struct child_process rls;
+	struct pushobj po = PO_INIT;
+	const char *head;
 	
+	char **argv = xmalloc(6 * sizeof(char *));
+	// const char **argv_pack = xmalloc(5 * sizeof(const char *));
+
+	read_pobj(fp, &po);
+
+	if (verify_pushobj(&po))
+		die("Failed verification");
+
+	// look up current head
+	head = resolve_ref("HEAD", head_sha1, 0, NULL);
+
+	// generate bundle
+	memset(&rls, 0, sizeof(rls));
+	argv[0] = "bundle";
+	argv[1] = "create";
+	argv[2] = "-";
+	argv[3] = "--branches";
+	argv[4] = xmalloc(sizeof(char) * (40 + 40 + 2 + 1));
+	argv[5] = NULL;
+
+	sprintf(argv[4], "%s..%s", po.head, sha1_to_hex(head_sha1));
+
 	pobj_release(&po);
+
+	rls.argv = argv;
+	rls.git_cmd = 1;
+
+	if (run_command(&rls))
+		return -1;
+	
 
 	return 0;
 }
