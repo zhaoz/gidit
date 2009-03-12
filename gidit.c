@@ -768,32 +768,44 @@ int gidit_get_bundle(FILE *fp, FILE *out, const char *basepath, unsigned int fla
 	return 0;
 }
 
-int gidit_verify_pushobj(FILE *fp, unsigned int flags)
+static int verify_pushobj(struct pushobj *po)
 {
 	int ii;
 	const char * prefix = NULL;
-	struct pushobj po = PO_INIT;
-	struct commit * cm = NULL;
 	unsigned char sha1[20];
+	struct commit * cm = NULL;
 
 	prefix = setup_git_directory();
 
-	read_pobj(fp, &po);
-
-	get_sha1_hex(po.head, sha1);
-
+	get_sha1_hex(po->head, sha1);
+	
 	// for each ref, verify its existence
 	cm = lookup_commit_reference_gently(sha1, 1);
 	if (!cm)
 		die("Failed verification");
 	
-	for (ii = 0; ii < po.lines; ++ii) {
-		get_sha1_hex(po.refs[ii], sha1);
+	for (ii = 0; ii < po->lines; ++ii) {
+		get_sha1_hex(po->refs[ii], sha1);
 		if (!lookup_commit_reference_gently(sha1, 1))
 			die("Failed verification");
-		else
-			printf("got %s\n", po.refs[ii]);
 	}
+
+	return 0;
+}
+
+int gidit_verify_pushobj(FILE *fp, unsigned int flags)
+{
+	int rc = 0;
+	struct pushobj po = PO_INIT;
+
+	read_pobj(fp, &po);
+
+	rc = verify_pushobj(&po);
+
+	pobj_release(&po);
+
+	return rc;
+}
 	
 	pobj_release(&po);
 
