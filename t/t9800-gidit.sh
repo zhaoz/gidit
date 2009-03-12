@@ -149,7 +149,9 @@ test_expect_code 1 'second pobj should be different from first' '
 test_expect_success 'bundle gen from pushobjects should succeed' '
 	echo "stuff2" >> tmp2 &&
 	git commit -a -m "up" &&
-	(cat pobj2) | git gidit --create-bundle 
+	(cat pobj2) | git gidit --create-bundle > bdn1 &&
+	git bundle create bdn2 --branches `cat pobj2 | grep HEAD | head -c 40`..`git log -n1 HEAD --pretty=oneline | head -c 40` &&
+	cmp bdn1 bdn2
 '
 
 # clean up
