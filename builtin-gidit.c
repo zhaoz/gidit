@@ -15,7 +15,7 @@
 static const char * const gidit_usage[] = {
 	"git gidit [-s|-u <key-id>] [--tags] --pushobj",
 	"git gidit -b <base_dir> --init",
-	"echo <projname>\n<PGP> | git gidit -b <base_dir> --proj-init",
+	"echo <projname>\\n<PGP> | git gidit -b <base_dir> --proj-init",
 	"echo <PGPSHA1><proj>\\n<pushobj> | git gidit -b <base-path> --updatepl",
 	"echo <PGPSHA1><proj> | git gidit -b <base-path> --polist",
 	"echo <SHA1 Pobj Start><SHA1 Pobj End> | git gidit -b <base-path> --get-bundle",
