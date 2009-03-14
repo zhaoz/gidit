@@ -15,9 +15,12 @@
 static const char * const gidit_usage[] = {
 	"git gidit [-s|-u <key-id>] [--tags] --pushobj",
 	"git gidit -b <base_dir> --init",
-	"echo <PGPSize><PGP> | git gidit -b <base_dir> --user-init",
+	"echo <projname>\n<PGP> | git gidit -b <base_dir> --proj-init",
 	"echo <PGPSHA1><proj>\\n<pushobj> | git gidit -b <base-path> --updatepl",
 	"echo <PGPSHA1><proj> | git gidit -b <base-path> --polist",
+	"echo <SHA1 Pobj Start><SHA1 Pobj End> | git gidit -b <base-path> --get-bundle",
+	"echo <SHA1 Pobj Start><SHA1 Pobj End><bundle> | git gidit -b <base-path> --store-bundle",
+	"echo <pushobj> | git gidit --verify-pobj",
 	NULL,
 };
 
@@ -33,6 +36,9 @@ static int git_gidit_config(const char *var, const char *value, void *cb)
 	return git_default_config(var, value, cb);
 }
 
+/**
+ * Test basepath existence and is absolute
+ */
 static int base_path_test(const char * basepath)
 {
 	if (!basepath) {
@@ -50,7 +56,8 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 {
 	int flags = 0;
 	int tags = 0, init = 0, verbose = 0, pushobj = 0, updatepl = 0, sign = 0,
-		user_init = 0, polist = 0, send = 0;
+		proj_init = 0, polist = 0, store_bundle = 0, get_bundle = 0, pobj_val = 0,
+		create_bundle = 0, send = 0;
 
 	const char *basepath = NULL;
 	const char *keyid = NULL;
@@ -70,12 +77,16 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		OPT_BOOLEAN( 0 , "send", &send, "send message to other node"),
 		OPT_STRING('k',NULL, &nodekey, "nodekey", "key of node"),
 		OPT_STRING('m',NULL, &message, "message", "message to send"),
+		OPT_BOOLEAN( 0 , "verify-pobj", &pobj_val, "validate a given pushobject"),
+		OPT_BOOLEAN( 0 , "create-bundle", &create_bundle, "validate a given pushobject"),
 		OPT_GROUP(""),
 		OPT_BOOLEAN( 0 , "updatepl", &updatepl, "Update push list"),
 		OPT_STRING('b', NULL, &basepath, "base-path", "base-path for daemon"),
 		OPT_BOOLEAN( 0 , "init", &init, "init gidit directory"),
-		OPT_BOOLEAN( 0 , "user-init", &user_init, "init users gidit directory"),
+		OPT_BOOLEAN( 0 , "proj-init", &proj_init, "init user's gidit project directory"),
 		OPT_BOOLEAN( 0 , "polist", &polist, "Generate list of push objects"),
+		OPT_BOOLEAN( 0 , "store-bundle", &store_bundle, "store a given bundle"),
+		OPT_BOOLEAN( 0 , "get-bundle", &get_bundle, "get a bundle"),
 		OPT_END()
 	};
 
@@ -98,24 +109,34 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 	if (tags)
 		flags |= INCLUDE_TAGS;
 
-	if (basepath) {
-		rc = base_path_test(basepath);
-		if (rc)
-			return rc;
-	}
+
+	if (pushobj)
+		return !!gidit_pushobj(stdout, signingkey, sign, flags);
+	else if (pobj_val)
+		return !!gidit_verify_pushobj(stdin, flags);
+	else if (create_bundle)
+		return !!gidit_gen_bundle(stdin, flags);
+	else if (send)
+		return !!send_message(nodekey, message);
+
+	if (!basepath)
+		usage_with_options(gidit_usage, options);
+
+	if (base_path_test(basepath))
+		return -1;
 
 	if (init)
 		rc = gidit_init(basepath);
-	else if (user_init)
-		rc = gidit_user_init(stdin, basepath, flags);
-	else if (pushobj)
-		rc = gidit_pushobj(stdout, signingkey, sign, flags);
+	else if (proj_init)
+		rc = gidit_proj_init(stdin, basepath, flags);
 	else if (updatepl)
 		rc = gidit_update_pl(stdin, basepath, flags);
 	else if (polist)
 		rc = gidit_po_list(stdin, basepath, flags);
-	else if (send)
-		rc = send_message(nodekey, message);
+	else if (store_bundle)
+		rc = gidit_store_bundle(stdin, basepath, flags);
+	else if (get_bundle)
+		rc = gidit_get_bundle(stdin, stdout, basepath, flags);
 	else
 		rc = -1;
 
