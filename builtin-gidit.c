@@ -21,6 +21,7 @@ static const char * const gidit_usage[] = {
 	"echo <SHA1 Pobj Start><SHA1 Pobj End> | git gidit -b <base-path> --get-bundle",
 	"echo <SHA1 Pobj Start><SHA1 Pobj End><bundle> | git gidit -b <base-path> --store-bundle",
 	"echo <pushobj> | git gidit --verify-pobj",
+	"git gidit --send-message -k <key> -m <message>",
 	NULL,
 };
 
@@ -117,7 +118,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 	else if (create_bundle)
 		return !!gidit_gen_bundle(stdin, flags);
 	else if (send)
-		return !!send_message(nodekey, message);
+		return !!gidit_send_message(nodekey, message);
 
 	if (!basepath)
 		usage_with_options(gidit_usage, options);

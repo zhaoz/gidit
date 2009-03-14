@@ -15,7 +15,7 @@ typedef struct chat_m{
 	char message[1000];
 } chat_message;
 
-int send_message(char * key, void * message);
+int gidit_send_message(char * key, void * message);
 
 /**
  * Generate a pushobj, which is a list of all refs including HEAD, and

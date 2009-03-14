@@ -181,7 +181,7 @@ static int do_sign(struct strbuf *buffer, char * signingkey)
 	return 0;
 }
 
-int send_message(char * key, void * message)
+int gidit_send_message(char * key, void * message)
 {
     int sock;                        /* Socket descriptor */
     struct sockaddr_in daemonAddr; /* Echo server address */
