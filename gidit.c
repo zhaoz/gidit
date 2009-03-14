@@ -365,7 +365,7 @@ int gidit_init(const char *path)
 
 	// create these dirs if they don't exist
 	if ((rc = safe_create_dir(BUNDLES_DIR)) == 0 && 
-		(rc = safe_create_dir(PUSHOBJ_DIR)) == 0) {
+			(rc = safe_create_dir(PUSHOBJ_DIR)) == 0) {
 		return 0;
 	}
 
@@ -858,8 +858,7 @@ int gidit_gen_bundle(FILE *fp, unsigned int flags)
 	struct pushobj po = PO_INIT;
 	const char *head;
 	
-	char **argv = xmalloc(6 * sizeof(char *));
-	// const char **argv_pack = xmalloc(5 * sizeof(const char *));
+	const char **argv = xmalloc(6 * sizeof(const char *));
 
 	read_pobj(fp, &po);
 
