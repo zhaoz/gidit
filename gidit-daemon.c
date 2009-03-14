@@ -257,18 +257,6 @@ static struct daemon_service daemon_service[] = {
 	{ "send", "send", send_service, 1, 1},
 };
 
-static void enable_service(const char *name, int ena)
-{
-	int i;
-	for (i = 0; i < ARRAY_SIZE(daemon_service); i++) {
-		if (!strcmp(daemon_service[i].name, name)) {
-			daemon_service[i].enabled = ena;
-			return;
-		}
-	}
-	die("No such service %s", name);
-}
-
 static char *xstrdup_tolower(const char *str)
 {
 	char *p, *dup = xstrdup(str);
@@ -863,14 +851,6 @@ int main(int argc, char **argv)
 		}
 		if (!prefixcmp(arg, "--pid-file=")) {
 			pid_file = arg + 11;
-			continue;
-		}
-		if (!prefixcmp(arg, "--enable=")) {
-			enable_service(arg + 9, 1);
-			continue;
-		}
-		if (!prefixcmp(arg, "--disable=")) {
-			enable_service(arg + 10, 0);
 			continue;
 		}
 		if (!strcmp(arg, "--")) {

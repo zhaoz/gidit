@@ -191,7 +191,7 @@ int gidit_send_message(char * key, void * message)
     int strLen;
 
     daemonIP = "127.0.0.1";             /* First arg: server IP address (dotted quad) */
-    daemonPort = 9418;  /* 7 is the well-known port for the echo service */
+    daemonPort = 9418;
 
     /* Create a reliable, stream socket using TCP */
     if ((sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
