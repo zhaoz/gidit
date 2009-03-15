@@ -277,6 +277,24 @@ static void free_projdir(struct gidit_projdir* pd)
 	free(pd);
 }
 
+static int read_ack(int fd)
+{
+	int status;
+	struct strbuf msg = STRBUF_INIT;
+
+	// receive the ack
+	if (read(fd, &status, 1) != 1)
+		die("error reading ack");
+
+	strbuf_read(&msg, fd, 512);
+	if (msg.len)
+		printf("%s\n", msg.buf);
+
+	strbuf_release(&msg);
+
+	return status;
+}
+
 static void print_pushobj(FILE * fp, struct gidit_pushobj *po)
 {
 	int ii;
@@ -983,6 +1001,9 @@ int gidit_push(const char * projname, const char *signingkey, unsigned int flags
 	struct sockaddr_in addr;
 	struct strbuf msg = STRBUF_INIT;
 	struct strbuf pgp_key = STRBUF_INIT;
+	struct gidit_pushobj po = PO_INIT;
+	struct gidit_pushobj po_new = PO_INIT;
+	FILE * fd;
 	uint32_t pgp_key_len = 0;
 
 	if (get_public_key(&pgp_key, signingkey) != 0)
@@ -1009,7 +1030,40 @@ int gidit_push(const char * projname, const char *signingkey, unsigned int flags
 		die("Error communicating with gidit daemon");
 
 	strbuf_release(&msg);
-	close(sock);
+
+	if (read_ack(sock) != 0)
+		die("Push failed");
+	
+	// now receive the pushobject
+	fd = fdopen(sock, "r");
+	read_pushobj(fd, &po);
+
+	// verify the given pushobject
+	if (verify_pushobj(&po) != 0)
+		die("Failed push object verification");
+	
+	// create new pushobject and send it off
+	if (!gen_pushobj(&po_new, signingkey, flags))
+		die("Failed to generate new pushobject");
+	
+	// generate the bundle, store in msg
+	if (gen_bundle(&msg, po.head, po_new.head))
+		die("Failed to generate bundle");
+	
+	// send the bundle and the new pobj off
+	print_pushobj(fd, &po_new);
+
+	if (fwrite(msg.buf, msg.len, 1, fd) != 1)
+		die("Failed to send bundle");
+
+	pobj_release(&po_new);
+	strbuf_release(&msg);
+	pobj_release(&po);
+
+	if (read_ack(sock) != 0)
+		die("Push failed");
+
+	fclose(fd);
 
 	return 0;
 }
