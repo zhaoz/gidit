@@ -19,13 +19,8 @@ Client-Daemon Operations
 
 . proj-init
 
-<<<<<<< HEAD:Documentation/technical/gidit-daemon.txt
 	Initializes a user's gidit project directory. This involves saving their 
 	public PGP key as well, if it does not already exist.
-=======
-	Initializes a user's gidit project directory. This involves saving their public PGP
-	key as well, if it does not already exist.
->>>>>>> Not sure what changes in this one....:Documentation/technical/gidit-daemon.txt
 
 	Format is:
 	[projname]\n[pgp public key]
