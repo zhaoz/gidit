@@ -920,34 +920,26 @@ int gidit_push(const char * projname, const char *signingkey, unsigned int flags
 	int sock;
 	char * host = "127.0.0.1";
 	int port = 9418;
-	unsigned char sha1[20];
     struct sockaddr_in addr;
 	struct strbuf msg = STRBUF_INIT;
 	struct strbuf pgp_key = STRBUF_INIT;
 	uint32_t pgp_key_len = 0;
-	git_SHA_CTX c;
 
 	if (get_public_key(&pgp_key, signingkey) != 0)
 		exit(1);
 	
 	sock = connect_to_daemon(&addr, host, port);
 
-	if (flags & FORCE) {
-		// [message type][pgp len][pgp key][projectname]
+	// [message type][pgp len][pgp key][projectname]
+	if (flags & FORCE)
 		strbuf_addch(&msg, GIDIT_PUSHF_MSG);
-		pgp_key_len = htonl(pgp_key.len);
-		strbuf_add(&msg, &pgp_key_len, sizeof(uint32_t));
-		strbuf_add(&msg, pgp_key.buf, pgp_key.len);
-	} else {
-		// [message type][pgp_sha1 bin][projectname]
+	else
 		strbuf_addch(&msg, GIDIT_PUSH_MSG);
 
-		git_SHA1_Init(&c);
-		git_SHA1_Update(&c, pgp_key.buf, pgp_key.len);
-		git_SHA1_Final(sha1, &c);
+	pgp_key_len = htonl(pgp_key.len);
+	strbuf_add(&msg, &pgp_key_len, sizeof(uint32_t));
+	strbuf_add(&msg, pgp_key.buf, pgp_key.len);
 
-		strbuf_add(&msg, sha1, 20);
-	}
 	strbuf_release(&pgp_key);
 
 	strbuf_addstr(&msg, projname);
@@ -955,7 +947,6 @@ int gidit_push(const char * projname, const char *signingkey, unsigned int flags
 	// send message to the daemon
 	if (write(sock, msg.buf, msg.len) != msg.len)
 		die("Error communicating with gidit daemon");
-	
 
 	strbuf_release(&msg);
 	close(sock);

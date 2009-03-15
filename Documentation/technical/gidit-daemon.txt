@@ -68,15 +68,14 @@ Client->Daemon Push
 
 . Push (Known Project) (0)
 
-	[1 byte][20 bytes][project name]
-	First byte denotes message type, known project pushes are done with a 0.
-	Next twenty bytes stores the sha1 of the pgp public key, the rest of the
-	message stores the project name.
+	[1 byte][4 bytes][pgp public key][project name]
+	Message type is 1. 
+	4 bytes store size of pgp public key
+	followed by pgp public key of said length
+	rest of message stores project name
 
 . Push (force, unknown project) (1)
 
 	[1 byte][4 bytes][pgp public key][project name]
-	Message type is 1. 
-	4 bytes store size of pgp public key
-	rest of message stores project name
+	Message type is 1. rest is same as push
 
