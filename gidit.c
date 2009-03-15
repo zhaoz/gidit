@@ -90,8 +90,6 @@ static int get_public_key(struct strbuf *buffer, const char * signingkey)
 	 * because gpg exits without reading and then write gets SIGPIPE. */
 	signal(SIGPIPE, SIG_IGN);
 
-	printf("%s\n", signingkey);
-
 	memset(&gpg, 0, sizeof(gpg));
 	gpg.argv = args;
 	gpg.out = -1;
