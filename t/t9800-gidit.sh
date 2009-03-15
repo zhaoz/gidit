@@ -17,7 +17,7 @@ test -e $GIDIT_DIR && rm -r $GIDIT_DIR
 # some commits to start it off
 echo "stuff" > tmp
 git add tmp
-git commit -m "added tmp"
+git commit -q -m "added tmp"
 
 test_expect_success 'init gidit directory should succeed' '
 	git gidit --init -b $GIDIT_DIR && 
