@@ -22,6 +22,39 @@ struct gidit_refs_cb_data {
 	unsigned int flags;
 };
 
+static int gen_bundle(struct strbuf *bun, const char * from, const char * to)
+{
+	struct child_process rls;
+	int len;
+	const char **argv = xmalloc(6 * sizeof(const char *));
+	
+	// generate bundle
+	memset(&rls, 0, sizeof(rls));
+	argv[0] = "bundle";
+	argv[1] = "create";
+	argv[2] = "-";
+	argv[3] = "--branches";
+	argv[4] = xmalloc(sizeof(char) * (40 + 40 + 2 + 1));
+	argv[5] = NULL;
+
+	sprintf(argv[4], "%s..%s", from, to);
+
+	rls.argv = argv;
+	rls.out = -1;
+	rls.git_cmd = 1;
+
+	if (start_command(&rls))
+		return error("Could not run bundle creation process");
+	
+	len = strbuf_read(bun, rls.out, 1024);
+	close(rls.out);
+
+	if (finish_command(&rls) || !len || len < 0)
+		return error("bundle creation failed");
+
+	return 0;
+}
+
 /**
  * connect to gidit daemon
  */
@@ -889,12 +922,10 @@ int gidit_verify_pushobj(FILE *fp, unsigned int flags)
 int gidit_gen_bundle(FILE *fp, unsigned int flags)
 {
 	unsigned char head_sha1[20];
-	struct child_process rls;
 	struct gidit_pushobj po = PO_INIT;
+	struct strbuf bun = STRBUF_INIT;
 	const char *head;
 	
-	const char **argv = xmalloc(6 * sizeof(const char *));
-
 	read_pushobj(fp, &po);
 
 	if (verify_pushobj(&po))
@@ -903,25 +934,15 @@ int gidit_gen_bundle(FILE *fp, unsigned int flags)
 	// look up current head
 	head = resolve_ref("HEAD", head_sha1, 0, NULL);
 
-	// generate bundle
-	memset(&rls, 0, sizeof(rls));
-	argv[0] = "bundle";
-	argv[1] = "create";
-	argv[2] = "-";
-	argv[3] = "--branches";
-	argv[4] = xmalloc(sizeof(char) * (40 + 40 + 2 + 1));
-	argv[5] = NULL;
+	if (gen_bundle(&bun, po.head, sha1_to_hex(head_sha1)))
+		exit(1);
 
-	sprintf(argv[4], "%s..%s", po.head, sha1_to_hex(head_sha1));
-
-	pobj_release(&po);
-
-	rls.argv = argv;
-	rls.git_cmd = 1;
-
-	if (run_command(&rls))
-		return -1;
+	if (fwrite(bun.buf, bun.len, 1, stdout) != 1)
+		die("Failed to write out bundle");
 	
+	pobj_release(&po);
+	strbuf_release(&bun);
+
 	return 0;
 }
 
