@@ -18,6 +18,7 @@
 
 struct gidit_refs_cb_data {
 	struct strbuf *buf;
+	struct string_list * list;
 	unsigned int flags;
 };
 
@@ -146,6 +147,7 @@ static int resolve_one_ref(const char *path, const unsigned char *sha1,
 {
 	struct gidit_refs_cb_data *cb = cb_data;
 	int is_tag_ref;
+	char * cbuf = NULL;
 
 	/* ignore symbolic refs */
 	if ((flags & REF_ISSYMREF))
@@ -158,10 +160,13 @@ static int resolve_one_ref(const char *path, const unsigned char *sha1,
 			|| !prefixcmp(path, "refs/remotes/")
 			|| !prefixcmp(path, "refs/stash"))
 		return 0;
+	
 
-	strbuf_addstr(cb->buf, sha1_to_hex(sha1));
-	strbuf_addstr(cb->buf, " ");
-	strbuf_addstr(cb->buf, path);
+	cbuf = (char*)malloc(40 + 1 + strlen(path) + 1);
+	sprintf(cbuf, "%s %s", sha1_to_hex(sha1), path);
+	string_list_append(cbuf, cb->list);
+
+	strbuf_addstr(cb->buf, cbuf);
 	strbuf_addstr(cb->buf, "\n");
 
 	return 0;
@@ -170,7 +175,8 @@ static int resolve_one_ref(const char *path, const unsigned char *sha1,
 /**
  * Sign buffer
  */
-static int do_sign(struct strbuf *buffer, char * signingkey)
+static int do_sign(struct strbuf * sig, struct strbuf *buffer, 
+					char * signingkey)
 {
 	struct child_process gpg;
 	const char *args[4];
@@ -200,20 +206,20 @@ static int do_sign(struct strbuf *buffer, char * signingkey)
 		return error("gpg did not accept the tag data");
 	}
 	close(gpg.in);
-	len = strbuf_read(buffer, gpg.out, 1024);
+	len = strbuf_read(sig, gpg.out, 1024);
 	close(gpg.out);
 
 	if (finish_command(&gpg) || !len || len < 0)
 		return error("gpg failed to sign the tag");
 
 	/* Strip CR from the line endings, in case we are on Windows. */
-	for (i = j = 0; i < buffer->len; i++)
-		if (buffer->buf[i] != '\r') {
+	for (i = j = 0; i < sig->len; i++)
+		if (sig->buf[i] != '\r') {
 			if (i != j)
-				buffer->buf[j] = buffer->buf[i];
+				sig->buf[j] = sig->buf[i];
 			j++;
 		}
-	strbuf_setlen(buffer, j);
+	strbuf_setlen(sig, j);
 
 	return 0;
 }
@@ -313,38 +319,70 @@ static int init_projdir(struct gidit_projdir * pd)
 	return 0;
 }
 
-
-int gidit_pushobj(FILE *fp, char * signingkey, unsigned int flags)
+static int gen_pushobj(struct gidit_pushobj * po, char *signingkey, unsigned int flags)
 {
 	const char *head;
-	unsigned char head_sha1[21];
-	struct gidit_refs_cb_data cbdata;
 	struct strbuf buf = STRBUF_INIT;
+	struct strbuf sig = STRBUF_INIT;
+	struct gidit_refs_cb_data cbdata;
+	struct string_list list;
+	int ii;
+	unsigned char head_sha1[20];
+
+	pobj_release(po);
+
+	memset(&list, 0, sizeof(struct string_list));
+	memset(po->head, 0, 40);
+	memset(po->prev, 0, 40);
 
 	cbdata.buf = &buf;
 	cbdata.flags = flags;
+	cbdata.list = &list;
 
 	head = resolve_ref("HEAD", head_sha1, 0, NULL);
-	head_sha1[20] = '\0';
 	if (!head) {
 		strbuf_release(&buf);
 		return error("Failed to resolve HEAD as a valid ref.");
 	}
-	
+
+	sprintf(po->head, "%s", sha1_to_hex(head_sha1));
+
 	strbuf_add(&buf, sha1_to_hex(head_sha1), 40);
 	strbuf_addstr(&buf, " HEAD\n");
 
 	for_each_ref(resolve_one_ref, &cbdata);
 
-	if (flags & SIGN)
-		do_sign(&buf, signingkey);
+	po->lines = list.nr;
+	po->refs = (char**)malloc(sizeof(char*) * list.nr);
 
-	if (fwrite(buf.buf, buf.len, 1, fp) != 1) {
-		strbuf_release(&buf);
-		return error("Error while writing pushobj");
+	for (ii = 0; ii < list.nr; ii++) {
+		po->refs[ii] = (char*)malloc(strlen(list.items[ii].string) + 1);
+		strcpy(po->refs[ii], list.items[ii].string);
 	}
 
+	if (flags & SIGN)
+		do_sign(&sig, &buf, signingkey);
+	
+	po->signature = (char*)malloc(sig.len);
+	strncpy(po->signature, sig.buf, sig.len);
+
+	string_list_clear(&list, 0);
 	strbuf_release(&buf);
+	strbuf_release(&sig);
+
+	return 1;
+}
+
+
+int gidit_pushobj(FILE *fp, char * signingkey, unsigned int flags)
+{
+	struct gidit_pushobj po = PO_INIT;
+
+	if (!gen_pushobj(&po, signingkey, flags))
+		die("Error generating pushobject");
+
+	print_pobj(fp, &po);
+
 	return 0;
 }
 
