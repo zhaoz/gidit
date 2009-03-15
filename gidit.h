@@ -5,15 +5,44 @@
 #define PUSHOBJ_DIR "pushobjects"
 #define BUNDLES_DIR "bundles"
 
+#define END_SHA1 "0000000000000000000000000000000000000000"
+
 #define INCLUDE_TAGS 0x0001
 #define DEFAULT_CHIMERA_PORT 2323
 #define DEFAULT_LITSEN_PORT 9898
 
-typedef struct chat_m{
+#define GIDIT_PUSH_MSG 0
+#define GIDIT_PUSHF_MSG 1
+
+#define GIDIT_OK 0
+#define GIDIT_UNKNOWN_PROJ 1
+
+struct gidit_projdir {
+	char * basepath;
+	int pgp_len;
+	unsigned char * pgp;
+	unsigned char pgp_sha1[20];
+	char * userdir;
+	char * projdir;
+	char * projname;
+	char head[41];
+};
+
+typedef struct chat_m {
 	int pid;
 	Key source;
 	char message[1000];
 } chat_message;
+
+struct gidit_pushobj {
+	int lines;
+	char ** refs;
+	char * signature;
+	char head[41];
+	char prev[41];
+};
+
+#define PO_INIT { 0, NULL, NULL, "\0" }
 
 int gidit_send_message(char * key, void * message);
 
@@ -63,5 +92,10 @@ int gidit_verify_pushobj(FILE *fp, unsigned int flags);
  * Generate a bundle read from stdin
  */
 int gidit_gen_bundle(FILE *fp, unsigned int flags);
+
+/**
+ * push stuff out to DHT
+ */
+int gidit_push(unsigned int flags);
 
 #endif		// GIDIT_H

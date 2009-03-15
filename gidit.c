@@ -16,35 +16,12 @@
 
 #define TEST_DIR "/tmp/gidit"
 
-#define END_SHA1 "0000000000000000000000000000000000000000"
-
-struct projdir {
-	char * basepath;
-	int pgp_len;
-	unsigned char * pgp;
-	unsigned char pgp_sha1[20];
-	char * userdir;
-	char * projdir;
-	char * projname;
-	char head[41];
-};
-
-struct pushobj {
-	int lines;
-	char ** refs;
-	char * signature;
-	char head[41];
-	char prev[41];
-};
-
-#define PO_INIT { 0, NULL, NULL, "\0" }
-
 struct gidit_refs_cb_data {
 	struct strbuf *buf;
 	unsigned int flags;
 };
 
-static void pobj_release(struct pushobj *po)
+static void pobj_release(struct gidit_pushobj *po)
 {
 	int ii;
 	for (ii = 0; ii < po->lines; ii++)
@@ -222,7 +199,7 @@ int gidit_send_message(char * key, void * message)
     return 0;
 }
 
-static void free_projdir(struct projdir* pd)
+static void free_projdir(struct gidit_projdir* pd)
 {
 	if (pd->basepath)
 		free(pd->basepath);
@@ -242,7 +219,7 @@ static void free_projdir(struct projdir* pd)
 	free(pd);
 }
 
-static void print_pobj(FILE * fp, struct pushobj *po)
+static void print_pobj(FILE * fp, struct gidit_pushobj *po)
 {
 	int ii;
 	fprintf(fp, "%s HEAD\n", po->head);
@@ -254,7 +231,7 @@ static void print_pobj(FILE * fp, struct pushobj *po)
 /**
  * Read in projdir data, create projdir if it doesn't exist
  */
-static int init_projdir(struct projdir* pd)
+static int init_projdir(struct gidit_projdir * pd)
 {
 	int len = 0;
 	char * path = NULL;
@@ -375,13 +352,13 @@ int gidit_init(const char *path)
 /**
  * Fill out projdir hash
  */
-static struct projdir* new_projdir(const char * basepath, const char * sha1_hex, 
+static struct gidit_projdir * new_projdir(const char * basepath, const char * sha1_hex, 
 		const char * projname)
 {
 	ssize_t bd_size;
-	struct projdir * pd = NULL;
+	struct gidit_projdir  * pd = NULL;
 
-	pd = (struct projdir*)malloc(sizeof(struct projdir));
+	pd = (struct gidit_projdir *)malloc(sizeof(struct gidit_projdir ));
 	bd_size = strlen(basepath) + 1; 
 
 	// Set basepath
@@ -415,7 +392,7 @@ static struct projdir* new_projdir(const char * basepath, const char * sha1_hex,
 /**
  * Update the project head file, and the projdir struct's head
  */
-static void update_proj_head(struct projdir * pd, const char * sha1)
+static void update_proj_head(struct gidit_projdir  * pd, const char * sha1)
 {
 	FILE * head_fp;
 	char * head_path = NULL;
@@ -436,7 +413,7 @@ static void update_proj_head(struct projdir * pd, const char * sha1)
  * pushobject and update head file as well as projdir struct.
  * TODO verify pushobj with PGP key
  */
-static int append_pushobj(struct projdir * pd, struct strbuf * pobj, 
+static int append_pushobj(struct gidit_projdir  * pd, struct strbuf * pobj, 
 							struct strbuf *sig)
 {
 	unsigned char sha1[20];
@@ -470,7 +447,7 @@ static int append_pushobj(struct projdir * pd, struct strbuf * pobj,
 /**
  * Given a fd, read stuff into pushobj
  */
-static int read_pobj(FILE * fp, struct pushobj *po)
+static int read_pobj(FILE * fp, struct gidit_pushobj *po)
 {
 	int ii;
 	int head = 0;
@@ -541,7 +518,7 @@ static int read_pobj(FILE * fp, struct pushobj *po)
 /**
  * Given sha1, look up pushobj and return it
  */
-static int sha_to_pobj(struct pushobj *po, const struct projdir *pd, 
+static int sha_to_pobj(struct gidit_pushobj *po, const struct gidit_projdir  *pd, 
 						const char * sha1)
 {
 	FILE * fp;
@@ -570,7 +547,7 @@ static int sha_to_pobj(struct pushobj *po, const struct projdir *pd,
 
 int gidit_update_pl(FILE *fp, const char * basepath, unsigned int flags)
 {
-	struct projdir * pd;
+	struct gidit_projdir  * pd;
 	char pgp_sha1[41];
 	int ch = 0, rc = 0;
 	struct strbuf proj_name = STRBUF_INIT;
@@ -686,10 +663,10 @@ int gidit_proj_init(FILE *fp, const char * basepath, unsigned int flags)
 
 int gidit_po_list(FILE *fp, const char * basepath, unsigned int flags)
 {
-	struct projdir * pd;
+	struct gidit_projdir  * pd;
 	char pgp_sha1[41];
 	struct strbuf proj_name = STRBUF_INIT;
-	struct pushobj po = PO_INIT;
+	struct gidit_pushobj po = PO_INIT;
 	int rc = 0;
 
 	if (!read_sha1(fp, pgp_sha1))
@@ -812,7 +789,7 @@ int gidit_get_bundle(FILE *fp, FILE *out, const char *basepath, unsigned int fla
 	return 0;
 }
 
-static int verify_pushobj(struct pushobj *po)
+static int verify_pushobj(struct gidit_pushobj *po)
 {
 	int ii;
 	const char * prefix = NULL;
@@ -840,7 +817,7 @@ static int verify_pushobj(struct pushobj *po)
 int gidit_verify_pushobj(FILE *fp, unsigned int flags)
 {
 	int rc = 0;
-	struct pushobj po = PO_INIT;
+	struct gidit_pushobj po = PO_INIT;
 
 	read_pobj(fp, &po);
 
@@ -855,7 +832,7 @@ int gidit_gen_bundle(FILE *fp, unsigned int flags)
 {
 	unsigned char head_sha1[20];
 	struct child_process rls;
-	struct pushobj po = PO_INIT;
+	struct gidit_pushobj po = PO_INIT;
 	const char *head;
 	
 	const char **argv = xmalloc(6 * sizeof(const char *));
