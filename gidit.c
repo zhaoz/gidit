@@ -920,7 +920,7 @@ int gidit_push(const char * projname, const char *signingkey, unsigned int flags
 	int sock;
 	char * host = "127.0.0.1";
 	int port = 9418;
-    struct sockaddr_in addr;
+	struct sockaddr_in addr;
 	struct strbuf msg = STRBUF_INIT;
 	struct strbuf pgp_key = STRBUF_INIT;
 	uint32_t pgp_key_len = 0;

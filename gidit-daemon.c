@@ -36,9 +36,6 @@ static int export_all_trees;
 /* Take all paths relative to this one if non-NULL */
 static char *base_path;
 
-/* Flag indicating client sent extra args. */
-static int saw_extended_args;
-
 /* Timeout, and initial timeout */
 static unsigned int timeout;
 
@@ -175,51 +172,6 @@ static void gidit_daemon_init(char * bootstrap_addr, int bootstrap_port, int loc
 	chimera_join(chimera_state, host);
 }
 
-typedef int (*daemon_service_fn)(void);
-struct daemon_service {
-	const char *name;
-	const char *config_name;
-	daemon_service_fn fn;
-	int enabled;
-	int overridable;
-};
-
-static int run_service(char *dir, struct daemon_service *service)
-{
-	loginfo("Request %s for '%s'", service->name, dir);
-
-	/*
-	 * We'll ignore SIGTERM from now on, we have a
-	 * good client.
-	 */
-	signal(SIGTERM, SIG_IGN);
-
-	return service->fn();
-}
-
-static int upload_pack(void)
-{
-	/* Timeout as string */
-	char timeout_buf[64];
-
-	snprintf(timeout_buf, sizeof timeout_buf, "--timeout=%u", timeout);
-
-	/* git-upload-pack only ever reads stuff, so this is safe */
-	execl_git_cmd("upload-pack", "--strict", timeout_buf, ".", NULL);
-	return -1;
-}
-
-static int upload_archive(void)
-{
-	execl_git_cmd("upload-archive", ".", NULL);
-	return -1;
-}
-
-static int receive_pack(void)
-{
-	execl_git_cmd("receive-pack", ".", NULL);
-	return -1;
-}
 
 static int send_service(void)
 {
@@ -250,13 +202,6 @@ static int send_service(void)
 	return -1;
 }
 
-static struct daemon_service daemon_service[] = {
-	{ "upload-archive", "uploadarch", upload_archive, 0, 1 },
-	{ "upload-pack", "uploadpack", upload_pack, 1, 1 },
-	{ "receive-pack", "receivepack", receive_pack, 0, 1 },
-	{ "send", "send", send_service, 1, 1},
-};
-
 static char *xstrdup_tolower(const char *str)
 {
 	char *p, *dup = xstrdup(str);
@@ -265,97 +210,18 @@ static char *xstrdup_tolower(const char *str)
 	return dup;
 }
 
-/*
- * Separate the "extra args" information as supplied by the client connection.
- */
-static void parse_extra_args(char *extra_args, int buflen)
+static void safe_read(int fd, void *buffer, unsigned size)
 {
-	char *val;
-	int vallen;
-	char *end = extra_args + buflen;
-
-	while (extra_args < end && *extra_args) {
-		saw_extended_args = 1;
-		if (strncasecmp("host=", extra_args, 5) == 0) {
-			val = extra_args + 5;
-			vallen = strlen(val) + 1;
-			if (*val) {
-				/* Split <host>:<port> at colon. */
-				char *host = val;
-				char *port = strrchr(host, ':');
-				if (port) {
-					*port = 0;
-					port++;
-					free(tcp_port);
-					tcp_port = xstrdup(port);
-				}
-				free(hostname);
-				hostname = xstrdup_tolower(host);
-			}
-
-			/* On to the next one */
-			extra_args = val + vallen;
-		}
-	}
-
-	/*
-	 * Locate canonical hostname and its IP address.
-	 */
-	if (hostname) {
-#ifndef NO_IPV6
-		struct addrinfo hints;
-		struct addrinfo *ai, *ai0;
-		int gai;
-		static char addrbuf[HOST_NAME_MAX + 1];
-
-		memset(&hints, 0, sizeof(hints));
-		hints.ai_flags = AI_CANONNAME;
-
-		gai = getaddrinfo(hostname, 0, &hints, &ai0);
-		if (!gai) {
-			for (ai = ai0; ai; ai = ai->ai_next) {
-				struct sockaddr_in *sin_addr = (void *)ai->ai_addr;
-
-				inet_ntop(AF_INET, &sin_addr->sin_addr,
-					  addrbuf, sizeof(addrbuf));
-				free(canon_hostname);
-				canon_hostname = xstrdup(ai->ai_canonname);
-				free(ip_address);
-				ip_address = xstrdup(addrbuf);
-				break;
-			}
-			freeaddrinfo(ai0);
-		}
-#else
-		struct hostent *hent;
-		struct sockaddr_in sa;
-		char **ap;
-		static char addrbuf[HOST_NAME_MAX + 1];
-
-		hent = gethostbyname(hostname);
-
-		ap = hent->h_addr_list;
-		memset(&sa, 0, sizeof sa);
-		sa.sin_family = hent->h_addrtype;
-		sa.sin_port = htons(0);
-		memcpy(&sa.sin_addr, *ap, hent->h_length);
-
-		inet_ntop(hent->h_addrtype, &sa.sin_addr,
-			  addrbuf, sizeof(addrbuf));
-
-		free(canon_hostname);
-		canon_hostname = xstrdup(hent->h_name);
-		free(ip_address);
-		ip_address = xstrdup(addrbuf);
-#endif
-	}
+	ssize_t ret = read_in_full(fd, buffer, size);
+	if (ret < 0)
+		die("read error (%s)", strerror(errno));
+	else if (ret < size)
+		die("The remote end hung up unexpectedly");
 }
-
 
 static int execute(struct sockaddr *addr)
 {
-	static char line[1000];
-	int pktlen, len, i;
+	char flag;
 
 	if (addr) {
 		char addrbuf[256] = "";
@@ -385,18 +251,26 @@ static int execute(struct sockaddr *addr)
 	}
 
 	alarm(timeout);
-	pktlen = packet_read_line(0, line, sizeof(line));
-	alarm(0);
-
-	len = strlen(line);
-	if (pktlen != len)
-		loginfo("Extended attributes (%d bytes) exist <%.*s>",
-			(int) pktlen - len,
-			(int) pktlen - len, line + len + 1);
-	if (len && line[len-1] == '\n') {
-		line[--len] = 0;
-		pktlen--;
+	safe_read(0,&flag,sizeof(char));
+	switch((int)flag){
+		case GIDIT_PUSHF_MSG:
+			logerror("Force");
+		case GIDIT_PUSH_MSG:
+			logerror("Push message");
+			struct strbuf pgp_key = STRBUF_INIT;
+			struct strbuf project_name = STRBUF_INIT;
+			uint32_t pgp_len;
+			safe_read(0,&pgp_len,sizeof(uint32_t));
+			pgp_len = ntohl(pgp_len);
+			strbuf_read(&pgp_key,0,pgp_len);
+			strbuf_getline(&project_name,0,EOF);
+			logerror("Push message:\n\t%s\n\t%s",pgp_key.buf,project_name.buf);
+			break;
+		default:
+			die("Invalid input flag %d",(int)flag);
+			break;
 	}
+	alarm(0);
 
 	free(hostname);
 	free(canon_hostname);
@@ -404,24 +278,7 @@ static int execute(struct sockaddr *addr)
 	free(tcp_port);
 	hostname = canon_hostname = ip_address = tcp_port = NULL;
 
-	if (len != pktlen)
-		parse_extra_args(line + len + 1, pktlen - len - 1);
-
-	for (i = 0; i < ARRAY_SIZE(daemon_service); i++) {
-		struct daemon_service *s = &(daemon_service[i]);
-		int namelen = strlen(s->name);
-		if (!prefixcmp(line, "git-") &&
-		    !strncmp(s->name, line + 4, namelen) &&
-		    line[namelen + 4] == ' ') {
-			/*
-			 * Note: The directory here is probably context sensitive,
-			 * and might depend on the actual service being performed.
-			 */
-			return run_service(line + namelen + 5, s);
-		}
-	}
-
-	logerror("Protocol error: '%s'", line);
+	logerror("Protocol error");
 	return -1;
 }
 
