@@ -176,7 +176,7 @@ static int resolve_one_ref(const char *path, const unsigned char *sha1,
  * Sign buffer
  */
 static int do_sign(struct strbuf * sig, struct strbuf *buffer, 
-					char * signingkey)
+					const char * signingkey)
 {
 	struct child_process gpg;
 	const char *args[4];
@@ -244,7 +244,7 @@ static void free_projdir(struct gidit_projdir* pd)
 	free(pd);
 }
 
-static void print_pobj(FILE * fp, struct gidit_pushobj *po)
+static void print_pushobj(FILE * fp, struct gidit_pushobj *po)
 {
 	int ii;
 	fprintf(fp, "%s HEAD\n", po->head);
@@ -319,7 +319,8 @@ static int init_projdir(struct gidit_projdir * pd)
 	return 0;
 }
 
-static int gen_pushobj(struct gidit_pushobj * po, char *signingkey, unsigned int flags)
+static int gen_pushobj(struct gidit_pushobj * po, const char *signingkey, 
+						unsigned int flags)
 {
 	const char *head;
 	struct strbuf buf = STRBUF_INIT;
@@ -381,7 +382,7 @@ int gidit_pushobj(FILE *fp, char * signingkey, unsigned int flags)
 	if (!gen_pushobj(&po, signingkey, flags))
 		die("Error generating pushobject");
 
-	print_pobj(fp, &po);
+	print_pushobj(fp, &po);
 
 	return 0;
 }
@@ -504,7 +505,7 @@ static int append_pushobj(struct gidit_projdir  * pd, struct strbuf * pobj,
 /**
  * Given a fd, read stuff into pushobj
  */
-static int read_pobj(FILE * fp, struct gidit_pushobj *po)
+static int read_pushobj(FILE * fp, struct gidit_pushobj *po)
 {
 	int ii;
 	int head = 0;
@@ -575,7 +576,7 @@ static int read_pobj(FILE * fp, struct gidit_pushobj *po)
 /**
  * Given sha1, look up pushobj and return it
  */
-static int sha_to_pobj(struct gidit_pushobj *po, const struct gidit_projdir  *pd, 
+static int sha_to_pushobj(struct gidit_pushobj *po, const struct gidit_projdir  *pd, 
 						const char * sha1)
 {
 	FILE * fp;
@@ -592,7 +593,7 @@ static int sha_to_pobj(struct gidit_pushobj *po, const struct gidit_projdir  *pd
 	if (!fp)
 		return error("Could not open pushobj");
 	
-	read_pobj(fp, po);
+	read_pushobj(fp, po);
 
 	if (!po->prev)
 		return error("No previous pointer in pushobject");
@@ -741,14 +742,14 @@ int gidit_po_list(FILE *fp, const char * basepath, unsigned int flags)
 
 	// grab pushobjects and dump them out
 	// start with the head pushobj
-	if ((rc = sha_to_pobj(&po, pd, pd->head)) != 0)
+	if ((rc = sha_to_pushobj(&po, pd, pd->head)) != 0)
 		die("Failed pushobjlist generation");
 	
-	print_pobj(stdout, &po);
+	print_pushobj(stdout, &po);
 
 	while (strncmp(po.prev, END_SHA1, 40) != 0 &&
-			(rc = sha_to_pobj(&po, pd, po.prev)) == 0)
-		print_pobj(stdout, &po);
+			(rc = sha_to_pushobj(&po, pd, po.prev)) == 0)
+		print_pushobj(stdout, &po);
 
 	if (rc)
 		die("Error during pushobjlist generation");
@@ -876,7 +877,7 @@ int gidit_verify_pushobj(FILE *fp, unsigned int flags)
 	int rc = 0;
 	struct gidit_pushobj po = PO_INIT;
 
-	read_pobj(fp, &po);
+	read_pushobj(fp, &po);
 
 	rc = verify_pushobj(&po);
 
@@ -894,7 +895,7 @@ int gidit_gen_bundle(FILE *fp, unsigned int flags)
 	
 	const char **argv = xmalloc(6 * sizeof(const char *));
 
-	read_pobj(fp, &po);
+	read_pushobj(fp, &po);
 
 	if (verify_pushobj(&po))
 		die("Failed verification");
