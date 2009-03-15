@@ -101,4 +101,9 @@ int gidit_send_message(char * key, void * message);
  */
 int gidit_push(const char * projname, const char *signingkey, unsigned int flags);
 
+/**
+ * Function for reading pushobjects
+ */
+int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po);
+
 #endif		// GIDIT_H

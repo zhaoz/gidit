@@ -426,38 +426,6 @@ static int gen_pushobj(struct gidit_pushobj * po, const char *signingkey,
 }
 
 
-int gidit_pushobj(FILE *fp, char * signingkey, unsigned int flags)
-{
-	struct gidit_pushobj po = PO_INIT;
-
-	if (!gen_pushobj(&po, signingkey, flags))
-		die("Error generating pushobject");
-
-	print_pushobj(fp, &po);
-
-	return 0;
-}
-
-/**
- * initialize a given directory
- */
-int gidit_init(const char *path)
-{
-	int rc = 0;
-	if ((rc = safe_create_dir(path)))
-		return rc;
-
-	chdir(path);
-
-	// create these dirs if they don't exist
-	if ((rc = safe_create_dir(BUNDLES_DIR)) == 0 && 
-			(rc = safe_create_dir(PUSHOBJ_DIR)) == 0) {
-		return 0;
-	}
-
-	return rc;
-}
-
 /**
  * Fill out projdir hash
  */
@@ -553,76 +521,6 @@ static int append_pushobj(struct gidit_projdir  * pd, struct strbuf * pobj,
 	return 0;
 }
 
-/**
- * Given a fd, read stuff into pushobj
- */
-static int read_pushobj(FILE * fp, struct gidit_pushobj *po)
-{
-	int ii;
-	int head = 0;
-	char * cbuf = NULL;
-	struct strbuf buf = STRBUF_INIT;
-	struct strbuf sig = STRBUF_INIT;
-	struct string_list list;
-
-	pobj_release(po);
-
-	memset(&list, 0, sizeof(struct string_list));
-	memset(po->head, 0, 40);
-
-	while (strbuf_getline(&buf, fp, '\n') != EOF) {
-		if (strncmp(buf.buf, PGP_SIGNATURE, strlen(PGP_SIGNATURE)) == 0)
-			break;
-
-		// check to see if this is the HEAD ref
-		if (strncmp(buf.buf + 41, "HEAD", 4) == 0) {
-			strncpy(po->head, buf.buf, 40);
-			head = 1;
-			continue;
-		}
-
-		cbuf = (char*)malloc(buf.len);
-		strcpy(cbuf, buf.buf);
-		string_list_append(cbuf, &list);
-	}
-
-	if (!head)
-		die("pushobject did not contain HEAD ref");
-	
-	po->lines = list.nr;
-	po->refs = (char**)malloc(sizeof(char*) * list.nr);
-
-	for (ii = 0; ii < list.nr; ii++) {
-		po->refs[ii] = (char*)malloc(strlen(list.items[ii].string) + 1);
-		strcpy(po->refs[ii], list.items[ii].string);
-	}
-
-	// rest of the stuff is signature
-	strbuf_add(&sig, buf.buf, buf.len);
-	strbuf_addstr(&sig, "\n");
-	while (strbuf_getline(&buf, fp, '\n') != EOF) {
-		strbuf_add(&sig, buf.buf, buf.len);
-		strbuf_addstr(&sig, "\n");
-		if (strncmp(buf.buf, END_PGP_SIGNATURE, strlen(END_PGP_SIGNATURE)) == 0)
-			break;
-	}
-	po->signature = (char*)malloc(sig.len);
-	strcpy(po->signature, sig.buf);
-
-	memset(po->prev, 0, 40);
-	
-	// now the rest of the stuff is the prev pointer
-	if (strbuf_getline(&buf, fp, '\n') != EOF) {
-		strncpy(po->prev, buf.buf, 40);
-		po->prev[40] = '\0';
-	}
-
-	strbuf_release(&buf);
-	strbuf_release(&sig);
-	string_list_clear(&list, 0);
-
-	return 1;
-}
 
 /**
  * Given sha1, look up pushobj and return it
@@ -644,7 +542,7 @@ static int sha_to_pushobj(struct gidit_pushobj *po, const struct gidit_projdir  
 	if (!fp)
 		return error("Could not open pushobj");
 	
-	read_pushobj(fp, po);
+	gidit_read_pushobj(fp, po);
 
 	if (!po->prev)
 		return error("No previous pointer in pushobject");
@@ -653,6 +551,64 @@ static int sha_to_pushobj(struct gidit_pushobj *po, const struct gidit_projdir  
 
 	return 0;
 }
+
+static int verify_pushobj(struct gidit_pushobj *po)
+{
+	int ii;
+	const char * prefix = NULL;
+	unsigned char sha1[20];
+	struct commit * cm = NULL;
+
+	prefix = setup_git_directory();
+
+	get_sha1_hex(po->head, sha1);
+	
+	// for each ref, verify its existence
+	cm = lookup_commit_reference_gently(sha1, 1);
+	if (!cm)
+		die("Failed verification");
+	
+	for (ii = 0; ii < po->lines; ++ii) {
+		get_sha1_hex(po->refs[ii], sha1);
+		if (!lookup_commit_reference_gently(sha1, 1))
+			die("Failed verification");
+	}
+
+	return 0;
+}
+
+int gidit_pushobj(FILE *fp, char * signingkey, unsigned int flags)
+{
+	struct gidit_pushobj po = PO_INIT;
+
+	if (!gen_pushobj(&po, signingkey, flags))
+		die("Error generating pushobject");
+
+	print_pushobj(fp, &po);
+
+	return 0;
+}
+
+/**
+ * initialize a given directory
+ */
+int gidit_init(const char *path)
+{
+	int rc = 0;
+	if ((rc = safe_create_dir(path)))
+		return rc;
+
+	chdir(path);
+
+	// create these dirs if they don't exist
+	if ((rc = safe_create_dir(BUNDLES_DIR)) == 0 && 
+			(rc = safe_create_dir(PUSHOBJ_DIR)) == 0) {
+		return 0;
+	}
+
+	return rc;
+}
+
 
 int gidit_update_pl(FILE *fp, const char * basepath, unsigned int flags)
 {
@@ -898,29 +854,75 @@ int gidit_get_bundle(FILE *fp, FILE *out, const char *basepath, unsigned int fla
 	return 0;
 }
 
-static int verify_pushobj(struct gidit_pushobj *po)
+/**
+ * Given a fd, read stuff into pushobj
+ */
+int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po)
 {
 	int ii;
-	const char * prefix = NULL;
-	unsigned char sha1[20];
-	struct commit * cm = NULL;
+	int head = 0;
+	char * cbuf = NULL;
+	struct strbuf buf = STRBUF_INIT;
+	struct strbuf sig = STRBUF_INIT;
+	struct string_list list;
 
-	prefix = setup_git_directory();
+	pobj_release(po);
 
-	get_sha1_hex(po->head, sha1);
-	
-	// for each ref, verify its existence
-	cm = lookup_commit_reference_gently(sha1, 1);
-	if (!cm)
-		die("Failed verification");
-	
-	for (ii = 0; ii < po->lines; ++ii) {
-		get_sha1_hex(po->refs[ii], sha1);
-		if (!lookup_commit_reference_gently(sha1, 1))
-			die("Failed verification");
+	memset(&list, 0, sizeof(struct string_list));
+	memset(po->head, 0, 40);
+
+	while (strbuf_getline(&buf, fp, '\n') != EOF) {
+		if (strncmp(buf.buf, PGP_SIGNATURE, strlen(PGP_SIGNATURE)) == 0)
+			break;
+
+		// check to see if this is the HEAD ref
+		if (strncmp(buf.buf + 41, "HEAD", 4) == 0) {
+			strncpy(po->head, buf.buf, 40);
+			head = 1;
+			continue;
+		}
+
+		cbuf = (char*)malloc(buf.len);
+		strcpy(cbuf, buf.buf);
+		string_list_append(cbuf, &list);
 	}
 
-	return 0;
+	if (!head)
+		die("pushobject did not contain HEAD ref");
+	
+	po->lines = list.nr;
+	po->refs = (char**)malloc(sizeof(char*) * list.nr);
+
+	for (ii = 0; ii < list.nr; ii++) {
+		po->refs[ii] = (char*)malloc(strlen(list.items[ii].string) + 1);
+		strcpy(po->refs[ii], list.items[ii].string);
+	}
+
+	// rest of the stuff is signature
+	strbuf_add(&sig, buf.buf, buf.len);
+	strbuf_addstr(&sig, "\n");
+	while (strbuf_getline(&buf, fp, '\n') != EOF) {
+		strbuf_add(&sig, buf.buf, buf.len);
+		strbuf_addstr(&sig, "\n");
+		if (strncmp(buf.buf, END_PGP_SIGNATURE, strlen(END_PGP_SIGNATURE)) == 0)
+			break;
+	}
+	po->signature = (char*)malloc(sig.len);
+	strcpy(po->signature, sig.buf);
+
+	memset(po->prev, 0, 40);
+	
+	// now the rest of the stuff is the prev pointer
+	if (strbuf_getline(&buf, fp, '\n') != EOF) {
+		strncpy(po->prev, buf.buf, 40);
+		po->prev[40] = '\0';
+	}
+
+	strbuf_release(&buf);
+	strbuf_release(&sig);
+	string_list_clear(&list, 0);
+
+	return 1;
 }
 
 int gidit_verify_pushobj(FILE *fp, unsigned int flags)
@@ -928,7 +930,7 @@ int gidit_verify_pushobj(FILE *fp, unsigned int flags)
 	int rc = 0;
 	struct gidit_pushobj po = PO_INIT;
 
-	read_pushobj(fp, &po);
+	gidit_read_pushobj(fp, &po);
 
 	rc = verify_pushobj(&po);
 
@@ -944,7 +946,7 @@ int gidit_gen_bundle(FILE *fp, unsigned int flags)
 	struct strbuf bun = STRBUF_INIT;
 	const char *head;
 	
-	read_pushobj(fp, &po);
+	gidit_read_pushobj(fp, &po);
 
 	if (verify_pushobj(&po))
 		die("Failed verification");
@@ -1036,7 +1038,7 @@ int gidit_push(const char * projname, const char *signingkey, unsigned int flags
 	
 	// now receive the pushobject
 	fd = fdopen(sock, "r");
-	read_pushobj(fd, &po);
+	gidit_read_pushobj(fd, &po);
 
 	// verify the given pushobject
 	if (verify_pushobj(&po) != 0)
