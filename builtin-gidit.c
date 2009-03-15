@@ -133,7 +133,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 	else if (pushobj)
 		rc = gidit_pushobj(stdout, signingkey, sign, flags);
 	else if (updatepl)
-		rc = base_path_test(basepath) || gidit_update_pl(stdin, basepath, flags);
+		rc = gidit_update_pl(stdin, basepath, flags);
 	else if (polist)
 		rc = gidit_po_list(stdin, basepath, flags);
 	else if (store_bundle)
