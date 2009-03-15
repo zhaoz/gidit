@@ -54,6 +54,7 @@ int gidit_store_bundle(FILE *fp, const char * basepath, unsigned int flags);
  */
 int gidit_get_bundle(FILE *fp,  FILE * out, const char * basepath, unsigned int flags);
 
+<<<<<<< HEAD:gidit.h
 /**
  * Verify if a pushobject would apply cleanly to repo
  */
@@ -64,4 +65,6 @@ int gidit_verify_pushobj(FILE *fp, unsigned int flags);
  */
 int gidit_gen_bundle(FILE *fp, unsigned int flags);
 
+=======
+>>>>>>> Not sure what changes in this one....:gidit.h
 #endif		// GIDIT_H

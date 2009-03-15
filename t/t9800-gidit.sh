@@ -154,6 +154,22 @@ test_expect_success 'bundle gen from pushobjects should succeed' '
 	cmp bdn1 bdn2
 '
 
+export POBJ_END_SHA1=`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD | head -c 40`
+export POBJ_START_SHA1=`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/$POBJ_END_SHA1 | tail -n 1 | head -c 40`
+export BUNDLE_SHA1=`cat $TEST_DIRECTORY/t9800/bundle | sha1sum | head -c 40`
+
+test_expect_success 'bundle saving should work' '
+	(echo -n "$POBJ_START_SHA1$POBJ_END_SHA1" && cat $TEST_DIRECTORY/t9800/bundle) | git gidit --store-bundle -b $GIDIT_DIR &&
+	test -e $GIDIT_DIR/bundles/$POBJ_START_SHA1/$POBJ_END_SHA1/BUNDLES &&
+	test -e $GIDIT_DIR/bundles/$POBJ_START_SHA1/$POBJ_END_SHA1/$BUNDLE_SHA1 &&
+	test `cat $GIDIT_DIR/bundles/$POBJ_START_SHA1/$POBJ_END_SHA1/BUNDLES` == $BUNDLE_SHA1
+'
+
+test_expect_success 'get bundle should work' '
+	(echo -n "$POBJ_START_SHA1$POBJ_END_SHA1") | git gidit --get-bundle -b $GIDIT_DIR > tmp &&
+	cmp tmp $TEST_DIRECTORY/t9800/bundle
+'
+
 # clean up
 rm -rf $GIDIT_DIR
 

@@ -44,6 +44,7 @@ struct gidit_refs_cb_data {
 	unsigned int flags;
 };
 
+<<<<<<< HEAD:gidit.c
 static void pobj_release(struct pushobj *po)
 {
 	int ii;
@@ -58,6 +59,8 @@ static void pobj_release(struct pushobj *po)
 	po->lines = 0;
 }
 
+=======
+>>>>>>> Not sure what changes in this one....:gidit.c
 /**
  * Success if directory does not exist yet and was able to create, or 
  * already exists and is writable
@@ -104,9 +107,14 @@ static int enter_bundle_dir(const char * basepath, const char *start_pobj_sha1,
 	return 1;
 }
 
+<<<<<<< HEAD:gidit.c
 static int resolve_one_ref(const char *path, const unsigned char *sha1,
 			  int flags, void *cb_data)
 {
+=======
+static int handle_one_ref(const char *path, const unsigned char *sha1,
+			  int flags, void *cb_data) {
+>>>>>>> Not sure what changes in this one....:gidit.c
 	struct gidit_refs_cb_data *cb = cb_data;
 	int is_tag_ref;
 
@@ -181,7 +189,46 @@ static int do_sign(struct strbuf *buffer, char * signingkey)
 	return 0;
 }
 
+<<<<<<< HEAD:gidit.c
 int gidit_send_message(char * key, void * message)
+=======
+int gidit_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags)
+{
+	const char *head;
+	unsigned char head_sha1[21];
+	struct gidit_refs_cb_data cbdata;
+	struct strbuf buf = STRBUF_INIT;
+
+	cbdata.buf = &buf;
+	cbdata.flags = flags;
+
+	head = resolve_ref("HEAD", head_sha1, 0, NULL);
+	head_sha1[20] = '\0';
+	if (!head) {
+		strbuf_release(&buf);
+		return error("Failed to resolve HEAD as a valid ref.");
+	}
+	
+	strbuf_add(&buf, sha1_to_hex(head_sha1), 40);
+	strbuf_addstr(&buf, " HEAD\n");
+
+	for_each_ref(handle_one_ref, &cbdata);
+
+	if (sign)
+		do_sign(&buf, signingkey);
+
+	if (fwrite(buf.buf, buf.len, 1, fp) != 1) {
+		strbuf_release(&buf);
+		return error("Error while writing pushobj");
+	}
+
+	strbuf_release(&buf);
+	return 0;
+}
+
+<<<<<<< HEAD:gidit.c
+int send_message(char * key, void * message)
+>>>>>>> Not sure what changes in this one....:gidit.c
 {
     int sock;                        /* Socket descriptor */
     struct sockaddr_in daemonAddr; /* Echo server address */
@@ -222,6 +269,55 @@ int gidit_send_message(char * key, void * message)
     return 0;
 }
 
+<<<<<<< HEAD:gidit.c
+=======
+static int safe_create_dir(const char *dir)
+{
+	int rc = 0;
+	if (mkdir(dir, 0777) < 0) {
+		if (errno != EEXIST) {
+			perror(dir);
+			rc = error("Error while making directory: %s", dir);
+		} else if (access(dir, W_OK)) {
+			rc = error("Unable to write to directory: %s", dir);
+		}
+	}
+
+	return rc;
+}
+
+=======
+>>>>>>> 0e8a43c3c2629aa7377696bccc533d8f5f6b9021:gidit.c
+static int safe_create_rel_dir(const char *base, const char *rel)
+{
+	char *full_path;
+	int rc = 0;
+	full_path = (char*)malloc(strlen(base) + strlen(rel) + 2);
+	sprintf(full_path, "%s/%s", base, rel);
+	rc = safe_create_dir(full_path);
+	free(full_path);
+	return rc;
+}
+
+/**
+ * initialize a given directory
+ */
+int gidit_init(const char *path)
+{
+	int rc = 0;
+	if ((rc = safe_create_dir(path)))
+		return rc;
+
+	// create these dirs if they don't exist
+	if ((rc = safe_create_rel_dir(path, BUNDLES_DIR)) == 0 && 
+		(rc = safe_create_rel_dir(path, PUSHOBJ_DIR)) == 0) {
+		return 0;
+	}
+
+	return rc;
+}
+
+>>>>>>> Not sure what changes in this one....:gidit.c
 static void free_projdir(struct projdir* pd)
 {
 	if (pd->basepath)
@@ -467,6 +563,7 @@ static int append_pushobj(struct projdir * pd, struct strbuf * pobj,
 	return 0;
 }
 
+<<<<<<< HEAD:gidit.c
 /**
  * Given a fd, read stuff into pushobj
  */
@@ -568,6 +665,8 @@ static int sha_to_pobj(struct pushobj *po, const struct projdir *pd,
 	return 0;
 }
 
+=======
+>>>>>>> Not sure what changes in this one....:gidit.c
 int gidit_update_pl(FILE *fp, const char * basepath, unsigned int flags)
 {
 	struct projdir * pd;
@@ -652,8 +751,14 @@ int gidit_proj_init(FILE *fp, const char * basepath, unsigned int flags)
 
 
 	// change dir to pushobjects dir
+<<<<<<< HEAD:gidit.c
 	if (chdir(basepath) || chdir(PUSHOBJ_DIR))
 		return error("Error going to pushobjects directory\n");
+=======
+	if (chdir(basepath) || chdir(PUSHOBJ_DIR)) {
+		return error("Error going to pushobjects directory\n");
+	}
+>>>>>>> Not sure what changes in this one....:gidit.c
 
 	sprintf(pgp_sha1, "%s", sha1_to_hex(sha1));
 
@@ -686,6 +791,7 @@ int gidit_proj_init(FILE *fp, const char * basepath, unsigned int flags)
 
 int gidit_po_list(FILE *fp, const char * basepath, unsigned int flags)
 {
+<<<<<<< HEAD:gidit.c
 	struct projdir * pd;
 	char pgp_sha1[41];
 	struct strbuf proj_name = STRBUF_INIT;
@@ -736,6 +842,38 @@ int gidit_store_bundle(FILE *fp, const char * basepath, unsigned int flags)
 
 	if (!read_sha1(fp, start_pobj_sha1) || !read_sha1(fp, end_pobj_sha1))
 		return error("protocol error: could not read sha1");
+=======
+	int ii;
+	for (ii = 0; ii < po->lines; ii++)
+		free(po->refs[ii]);
+
+	if (po->refs)
+		free(po->refs);
+	if (po->signature)
+		free(po->signature);
+	
+	po->lines = 0;
+}
+
+/**
+ * Given sha1, look up pushobj and return it
+ */
+static int sha_to_pobj(struct pushobj *po, const struct projdir *pd, 
+						const char * sha1)
+{
+	FILE * fp;
+	int ii;
+	char * path = NULL;
+	struct string_list list;
+	char * cbuf;
+	struct strbuf buf = STRBUF_INIT;
+	struct strbuf sig = STRBUF_INIT;
+
+	pobj_release(po);
+
+	if (strncmp(sha1, END_SHA1, 40) == 0)
+		die("Invalid sha1");
+>>>>>>> Not sure what changes in this one....:gidit.c
 
 	if (!enter_bundle_dir(basepath, start_pobj_sha1, end_pobj_sha1))
 		return error("Failed to enter gidit pushobj dir");
@@ -839,14 +977,34 @@ static int verify_pushobj(struct pushobj *po)
 
 int gidit_verify_pushobj(FILE *fp, unsigned int flags)
 {
+<<<<<<< HEAD:gidit.c
+=======
+	struct projdir * pd;
+	char pgp_sha1[41];
+	struct strbuf proj_name = STRBUF_INIT;
+	struct pushobj po = PO_INIT;
+>>>>>>> Not sure what changes in this one....:gidit.c
 	int rc = 0;
 	struct pushobj po = PO_INIT;
 
+<<<<<<< HEAD:gidit.c
 	read_pobj(fp, &po);
 
 	rc = verify_pushobj(&po);
 
 	pobj_release(&po);
+=======
+	if (!read_sha1(fp, pgp_sha1))
+		return error("pgpkey error: bad pushobject format");
+	
+	// next line is the project name
+	if (strbuf_getline(&proj_name, fp, '\n') == EOF)
+		return error("No projname: bad pushobject format");
+
+	pd = new_projdir(basepath, pgp_sha1, proj_name.buf);
+	if (!pd)
+		exit(1);
+>>>>>>> Not sure what changes in this one....:gidit.c
 
 	return rc;
 }
@@ -887,6 +1045,94 @@ int gidit_gen_bundle(FILE *fp, unsigned int flags)
 	if (run_command(&rls))
 		return -1;
 	
+
+	return 0;
+}
+
+int gidit_store_bundle(FILE *fp, const char * basepath, unsigned int flags)
+{
+	char start_pobj_sha1[41];
+	char end_pobj_sha1[41];
+	unsigned char bundle_sha1[20];
+	struct strbuf bundle = STRBUF_INIT;
+	git_SHA_CTX c;
+	FILE * out;
+
+	if (!read_sha1(fp, start_pobj_sha1) || !read_sha1(fp, end_pobj_sha1))
+		return error("protocol error: could not read sha1");
+
+	if (!enter_bundle_dir(basepath, start_pobj_sha1, end_pobj_sha1))
+		return error("Failed to enter gidit pushobj dir");
+
+
+	// now we need to read in the bundle, and store it in it's own sha1
+
+	strbuf_getline(&bundle, fp, EOF);
+	if (bundle.len == 0)
+		return error("Protocol error while reading bundle");
+
+	git_SHA1_Init(&c);
+	git_SHA1_Update(&c, bundle.buf, bundle.len);
+	git_SHA1_Final(bundle_sha1, &c);
+
+	out = fopen(sha1_to_hex(bundle_sha1), "w");
+
+	if (!out)
+		die("Error while writing bundle");
+
+	if (fwrite(bundle.buf, bundle.len, 1, out) != 1)
+		die("Error while writing to bundle");
+
+	fclose(out);
+
+	strbuf_release(&bundle);
+
+
+	// create BUNDLE file pointing to sha1
+	out = fopen("BUNDLES", "a");
+
+	if (!out)
+		die("Error while writing to BUNDLE");
+
+	fprintf(out, "%s\n", sha1_to_hex(bundle_sha1));
+
+	fclose(out);
+
+	return 0;
+}
+
+int gidit_get_bundle(FILE *fp, FILE *out, const char *basepath, unsigned int flags)
+{
+	char start_pobj_sha1[41];
+	char end_pobj_sha1[41];
+	char bundle_sha1[41];
+	int ch;
+	FILE * f;
+
+	if (!read_sha1(fp, start_pobj_sha1) || !read_sha1(fp, end_pobj_sha1))
+		return error("protocol error: could not read sha1");
+
+	if (!enter_bundle_dir(basepath, start_pobj_sha1, end_pobj_sha1))
+		return error("Failed to enter gidit pushobj dir");
+	
+	// in the directory, attempt to retreive the file name and then dump it out to stdout
+	f = fopen("BUNDLES", "r");
+
+	if (!read_sha1(f, bundle_sha1))
+		die("Error reading from BUNDLES");
+	
+	fclose(f);
+
+	f = fopen(bundle_sha1, "r");
+
+	if (!f)
+		die("Error getting bundle");
+	
+	while ((ch = fgetc(f)) != EOF)
+		fputc(ch, out);
+	
+
+	fclose(f);
 
 	return 0;
 }
