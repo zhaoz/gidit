@@ -8,6 +8,9 @@
 #define END_SHA1 "0000000000000000000000000000000000000000"
 
 #define INCLUDE_TAGS 0x0001
+#define FORCE 0x0002
+#define SIGN 0x0004
+
 #define DEFAULT_CHIMERA_PORT 2323
 #define DEFAULT_LITSEN_PORT 9898
 
@@ -44,13 +47,11 @@ struct gidit_pushobj {
 
 #define PO_INIT { 0, NULL, NULL, "\0" }
 
-int gidit_send_message(char * key, void * message);
-
 /**
  * Generate a pushobj, which is a list of all refs including HEAD, and
  * excluding stashes and remotes
  */
-int gidit_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags);
+int gidit_pushobj(FILE *fp, char * signingkey, unsigned int flags);
 
 /**
  * Initialize a gidit directory, that means creating the PUSHOBJ_DIR and 
@@ -93,9 +94,11 @@ int gidit_verify_pushobj(FILE *fp, unsigned int flags);
  */
 int gidit_gen_bundle(FILE *fp, unsigned int flags);
 
+int gidit_send_message(char * key, void * message);
+
 /**
  * push stuff out to DHT
  */
-int gidit_push(unsigned int flags);
+int gidit_push(const char * projname, const char *signingkey, unsigned int flags);
 
 #endif		// GIDIT_H

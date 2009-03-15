@@ -58,10 +58,11 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 	int flags = 0;
 	int tags = 0, init = 0, verbose = 0, pushobj = 0, updatepl = 0, sign = 0,
 		proj_init = 0, polist = 0, store_bundle = 0, get_bundle = 0, pobj_val = 0,
-		create_bundle = 0, send = 0;
+		force = 0, create_bundle = 0, send = 0, push = 0;
 
 	const char *basepath = NULL;
 	const char *keyid = NULL;
+	const char *projname = NULL;
 	char *nodekey = NULL;
 	char *message = NULL;
 
@@ -71,6 +72,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		OPT__VERBOSE(&verbose),
 		OPT_GROUP(""),
 		OPT_BOOLEAN( 0 , "tags", &tags, "include tags"),
+		OPT_BOOLEAN( 0 , "force", &force, "force"),
 		OPT_BOOLEAN('s', NULL, &sign, "annotated and GPG-signed tag"),
 		OPT_STRING('u', NULL, &keyid, "key-id",
 					"use another key to sign the tag"),
@@ -78,13 +80,17 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		OPT_BOOLEAN( 0 , "send", &send, "send message to other node"),
 		OPT_STRING('k',NULL, &nodekey, "nodekey", "key of node"),
 		OPT_STRING('m',NULL, &message, "message", "message to send"),
+		OPT_STRING('p',NULL, &projname, "project-name", "Project name"),
 		OPT_BOOLEAN( 0 , "verify-pobj", &pobj_val, "validate a given pushobject"),
-		OPT_BOOLEAN( 0 , "create-bundle", &create_bundle, "validate a given pushobject"),
+		OPT_BOOLEAN( 0 , "push", &push, "Do a push over gidit"),
+		OPT_BOOLEAN( 0 , "create-bundle", &create_bundle, 
+					"validate a given pushobject"),
 		OPT_GROUP(""),
 		OPT_BOOLEAN( 0 , "updatepl", &updatepl, "Update push list"),
 		OPT_STRING('b', NULL, &basepath, "base-path", "base-path for daemon"),
 		OPT_BOOLEAN( 0 , "init", &init, "init gidit directory"),
-		OPT_BOOLEAN( 0 , "proj-init", &proj_init, "init user's gidit project directory"),
+		OPT_BOOLEAN( 0 , "proj-init", &proj_init, 
+					"init user's gidit project directory"),
 		OPT_BOOLEAN( 0 , "polist", &polist, "Generate list of push objects"),
 		OPT_BOOLEAN( 0 , "store-bundle", &store_bundle, "store a given bundle"),
 		OPT_BOOLEAN( 0 , "get-bundle", &get_bundle, "get a bundle"),
@@ -94,6 +100,9 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 	git_config(git_gidit_config, NULL);
 
 	argc = parse_options(argc, argv, options, gidit_usage, 0);
+
+	if (push)
+		sign = 1;
 
 	if (keyid) {
 		sign = 1;
@@ -109,16 +118,23 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 
 	if (tags)
 		flags |= INCLUDE_TAGS;
-
+	if (force)
+		flags |= FORCE;
+	if (sign)
+		flags |= SIGN;
 
 	if (pushobj)
-		return !!gidit_pushobj(stdout, signingkey, sign, flags);
+		return !!gidit_pushobj(stdout, signingkey, flags);
 	else if (pobj_val)
 		return !!gidit_verify_pushobj(stdin, flags);
+	else if (pushobj)
+		return !!gidit_pushobj(stdout, signingkey, flags);
 	else if (create_bundle)
 		return !!gidit_gen_bundle(stdin, flags);
 	else if (send)
 		return !!gidit_send_message(nodekey, message);
+	else if (push)
+		return !!gidit_push(projname, signingkey, flags);
 
 	if (!basepath)
 		usage_with_options(gidit_usage, options);
@@ -130,8 +146,6 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		rc = gidit_init(basepath);
 	else if (proj_init)
 		rc = gidit_proj_init(stdin, basepath, flags);
-	else if (pushobj)
-		rc = gidit_pushobj(stdout, signingkey, sign, flags);
 	else if (updatepl)
 		rc = gidit_update_pl(stdin, basepath, flags);
 	else if (polist)

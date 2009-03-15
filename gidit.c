@@ -21,6 +21,66 @@ struct gidit_refs_cb_data {
 	unsigned int flags;
 };
 
+/**
+ * connect to gidit daemon
+ */
+static int connect_to_daemon(struct sockaddr_in * daemonAddr, 
+							const char * host, unsigned short port)
+{
+	int sock;
+
+    /* Create a reliable, stream socket using TCP */
+    if ((sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+        die("socket() failed");
+
+    /* Construct the server address structure */
+    memset(daemonAddr, 0, sizeof(host));     /* Zero out structure */
+    daemonAddr->sin_family      = AF_INET;             /* Internet address family */
+    daemonAddr->sin_addr.s_addr = inet_addr(host);   /* Server IP address */
+    daemonAddr->sin_port        = htons(port); /* Server port */
+
+    if (connect(sock, (struct sockaddr *)daemonAddr, sizeof(struct sockaddr_in)) < 0)
+        die("connect() failed");
+
+	return sock;
+}
+
+static int get_public_key(struct strbuf *buffer, const char * signingkey)
+{
+	struct child_process gpg;
+	const char *args[4];
+
+	memset(&gpg, 0, sizeof(gpg));
+
+	/* When the username signingkey is bad, program could be terminated
+	 * because gpg exits without reading and then write gets SIGPIPE. */
+	signal(SIGPIPE, SIG_IGN);
+
+	printf("%s\n", signingkey);
+
+	memset(&gpg, 0, sizeof(gpg));
+	gpg.argv = args;
+	gpg.out = -1;
+	args[0] = "gpg";
+	args[1] = "--export";
+	args[2] = signingkey;
+	args[3] = NULL;
+
+	if (start_command(&gpg))
+		return error("could not run gpg.");
+
+	while (strbuf_read(buffer, gpg.out, 1024))
+		;
+
+	close(gpg.out);
+
+	if (finish_command(&gpg) || !buffer->len)
+		return error("gpg failed to return public key");
+
+	return 0;
+}
+
+
 static void pobj_release(struct gidit_pushobj *po)
 {
 	int ii;
@@ -158,47 +218,6 @@ static int do_sign(struct strbuf *buffer, char * signingkey)
 	return 0;
 }
 
-int gidit_send_message(char * key, void * message)
-{
-    int sock;                        /* Socket descriptor */
-    struct sockaddr_in daemonAddr; /* Echo server address */
-    unsigned short daemonPort;     /* Echo server port */
-    char *daemonIP;                    /* Server IP address (dotted quad) */
-    char buf[256];     /* Buffer for echo string */
-    int strLen;
-
-    daemonIP = "127.0.0.1";             /* First arg: server IP address (dotted quad) */
-    daemonPort = 9418;
-
-    /* Create a reliable, stream socket using TCP */
-    if ((sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
-        die("socket() failed");
-
-    /* Construct the server address structure */
-    memset(&daemonAddr, 0, sizeof(daemonAddr));     /* Zero out structure */
-    daemonAddr.sin_family      = AF_INET;             /* Internet address family */
-    daemonAddr.sin_addr.s_addr = inet_addr(daemonIP);   /* Server IP address */
-    daemonAddr.sin_port        = htons(daemonPort); /* Server port */
-
-    /* Format outgoing buffer*/
-    strcpy(buf,"git-send ");
-    strcat(buf, TEST_DIR);
-    strLen = strlen(buf);
-    strcpy(buf+strLen+1,key);
-
-    /* Establish the connection to the echo server */
-    if (connect(sock, (struct sockaddr *) &daemonAddr, sizeof(daemonAddr)) < 0)
-        die("connect() failed");
-
-    /* Send the key to the server */
-    packet_write(sock, buf);
-    packet_write(sock, key);
-    packet_write(sock, message);
-
-    close(sock);
-    return 0;
-}
-
 static void free_projdir(struct gidit_projdir* pd)
 {
 	if (pd->basepath)
@@ -295,7 +314,7 @@ static int init_projdir(struct gidit_projdir * pd)
 }
 
 
-int gidit_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags)
+int gidit_pushobj(FILE *fp, char * signingkey, unsigned int flags)
 {
 	const char *head;
 	unsigned char head_sha1[21];
@@ -317,7 +336,7 @@ int gidit_pushobj(FILE *fp, char * signingkey, int sign, unsigned int flags)
 
 	for_each_ref(resolve_one_ref, &cbdata);
 
-	if (sign)
+	if (flags & SIGN)
 		do_sign(&buf, signingkey);
 
 	if (fwrite(buf.buf, buf.len, 1, fp) != 1) {
@@ -864,6 +883,83 @@ int gidit_gen_bundle(FILE *fp, unsigned int flags)
 	if (run_command(&rls))
 		return -1;
 	
+	return 0;
+}
+
+int gidit_send_message(char * key, void * message)
+{
+    int sock;                        /* Socket descriptor */
+    struct sockaddr_in daemonAddr;
+    unsigned short daemonPort;
+    char *daemonIP;                    /* Server IP address (dotted quad) */
+    char buf[256];     /* Buffer for echo string */
+    int strLen;
+
+    daemonIP = "127.0.0.1";             /* First arg: server IP address (dotted quad) */
+    daemonPort = 9418;
+
+	sock = connect_to_daemon(&daemonAddr, daemonIP, daemonPort);
+
+    /* Format outgoing buffer*/
+    strcpy(buf,"git-send ");
+    strcat(buf, TEST_DIR);
+    strLen = strlen(buf);
+    strcpy(buf+strLen+1,key);
+
+    /* Send the key to the server */
+    packet_write(sock, buf);
+    packet_write(sock, key);
+    packet_write(sock, message);
+
+    close(sock);
+    return 0;
+}
+
+int gidit_push(const char * projname, const char *signingkey, unsigned int flags)
+{
+	int sock;
+	char * host = "127.0.0.1";
+	int port = 9418;
+	unsigned char sha1[20];
+    struct sockaddr_in addr;
+	struct strbuf msg = STRBUF_INIT;
+	struct strbuf pgp_key = STRBUF_INIT;
+	uint32_t pgp_key_len = 0;
+	git_SHA_CTX c;
+
+	if (get_public_key(&pgp_key, signingkey) != 0)
+		exit(1);
+	
+	sock = connect_to_daemon(&addr, host, port);
+
+	if (flags & FORCE) {
+		// [message type][pgp len][pgp key][projectname]
+		strbuf_addch(&msg, GIDIT_PUSHF_MSG);
+		pgp_key_len = htonl(pgp_key.len);
+		strbuf_add(&msg, &pgp_key_len, sizeof(uint32_t));
+		strbuf_add(&msg, pgp_key.buf, pgp_key.len);
+	} else {
+		// [message type][pgp_sha1 bin][projectname]
+		strbuf_addch(&msg, GIDIT_PUSH_MSG);
+
+		git_SHA1_Init(&c);
+		git_SHA1_Update(&c, pgp_key.buf, pgp_key.len);
+		git_SHA1_Final(sha1, &c);
+
+		strbuf_add(&msg, sha1, 20);
+	}
+	strbuf_release(&pgp_key);
+
+	strbuf_addstr(&msg, projname);
+
+	// send message to the daemon
+	if (write(sock, msg.buf, msg.len) != msg.len)
+		die("Error communicating with gidit daemon");
+	
+
+	strbuf_release(&msg);
+	close(sock);
 
 	return 0;
 }
+
