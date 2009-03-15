@@ -116,7 +116,7 @@ test_expect_success 'bundle saving should work' '
 	(echo -n "$POBJ_START_SHA1$POBJ_END_SHA1" && cat $TEST_DIRECTORY/t9800/bundle) | git gidit --store-bundle -b $GIDIT_DIR &&
 	test -e $GIDIT_DIR/bundles/$POBJ_START_SHA1/$POBJ_END_SHA1/BUNDLES &&
 	test -e $GIDIT_DIR/bundles/$POBJ_START_SHA1/$POBJ_END_SHA1/$BUNDLE_SHA1 &&
-	test `cat $GIDIT_DIR/bundles/$POBJ_START_SHA1/$POBJ_END_SHA1/BUNDLES` == $BUNDLE_SHA1
+	test "`cat $GIDIT_DIR/bundles/$POBJ_START_SHA1/$POBJ_END_SHA1/BUNDLES | head -c 40`" = "$BUNDLE_SHA1"
 '
 
 test_expect_success 'get bundle should work' '
