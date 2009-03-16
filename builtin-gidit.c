@@ -129,7 +129,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		url = (char*)malloc(strlen("gidit://127.0.0.1:9418/") + 
 				strlen(projname) + 1 + strlen(signingkey) + 1);
 		sprintf(url, "gidit://127.0.0.1:9418/%s:%s", projname, signingkey);
-		return !!gidit_push(url, flags);
+		return !!gidit_push(url, 0, NULL, flags);
 	}
 
 	if (!basepath)

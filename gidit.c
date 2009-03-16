@@ -1064,7 +1064,11 @@ static int parse_url(const char *url, char ** host, int * port,
 	return 1;
 }
 
-int gidit_push(const char * url, unsigned int flags)
+/**
+ * Currently refspect and refspec_nr are ignored
+ */
+int gidit_push(const char * url, int refspec_nr, const char ** refspec, 
+				unsigned int flags)
 {
 	char * host = NULL;
 	char * projname = NULL;

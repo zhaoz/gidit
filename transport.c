@@ -11,6 +11,7 @@
 #include "bundle.h"
 #include "dir.h"
 #include "refs.h"
+#include "gidit.h"
 
 /* rsync support */
 
@@ -723,13 +724,20 @@ struct gidit_transport_data {
 
 static int gidit_transport_push(struct transport *transport, int refspec_nr, const char **refspec, int flags)
 {
-	return 0;
+	int nflags = 0;
+
+	if (flags & TRANSPORT_PUSH_FORCE)
+		nflags |= TRANSPORT_PUSH_FORCE;
+
+
+	return gidit_push(transport->url, refspec_nr, refspec, nflags);
 }
 
 static struct ref *get_refs_via_gidit(struct transport *transport)
 {
 	// struct gidit_transport_data *data = transport->data;
-	struct ref *refs;
+	struct ref *refs = NULL;
+
 
 	// connect_setup(transport);
 	// get_remote_heads(data->fd[0], &refs, 0, NULL, 0, NULL);
