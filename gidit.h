@@ -99,7 +99,7 @@ int gidit_send_message(char * key, void * message);
 /**
  * push stuff out to DHT
  */
-int gidit_push(const char * projname, const char *signingkey, unsigned int flags);
+int gidit_push(const char * url, unsigned int flags);
 
 /**
  * Function for reading pushobjects

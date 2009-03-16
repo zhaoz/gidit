@@ -8,5 +8,7 @@ char signingkey[1000];
 
 void set_signingkey(const char *value);
 
+int set_default_signingkey();
+
 #endif		// PGP_H
 

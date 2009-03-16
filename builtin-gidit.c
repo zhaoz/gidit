@@ -63,6 +63,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 	const char *basepath = NULL;
 	const char *keyid = NULL;
 	const char *projname = NULL;
+	char * url = NULL;
 	char *nodekey = NULL;
 	char *message = NULL;
 
@@ -108,12 +109,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		sign = 1;
 		set_signingkey(keyid);
 	} else if (sign) {
-		if (strlcpy(signingkey, git_committer_info(IDENT_ERROR_ON_NO_NAME),
-				sizeof(signingkey)) > sizeof(signingkey) - 1)
-			return error("committer info too long.");
-		char * bracket = strchr(signingkey, '>');
-		if (bracket)
-			bracket[1] = '\0';
+		set_default_signingkey();
 	}
 
 	if (tags)
@@ -133,8 +129,12 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		return !!gidit_gen_bundle(stdin, flags);
 	else if (send)
 		return !!gidit_send_message(nodekey, message);
-	else if (push)
-		return !!gidit_push(projname, signingkey, flags);
+	else if (push) {
+		url = (char*)malloc(strlen("gidit://127.0.0.1:9418/") + 
+				strlen(projname) + 1 + strlen(signingkey) + 1);
+		sprintf(url, "gidit://127.0.0.1:9418/%s:%s", projname, signingkey);
+		return !!gidit_push(url, flags);
+	}
 
 	if (!basepath)
 		usage_with_options(gidit_usage, options);

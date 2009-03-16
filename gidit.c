@@ -993,11 +993,83 @@ int gidit_send_message(char * key, void * message)
     return 0;
 }
 
-int gidit_push(const char * projname, const char *signingkey, unsigned int flags)
+static int parse_url(const char *url, char ** host, int * port, 
+						char ** projname)
 {
+	const char * pt = url + strlen("gidit://");
+	const char * pt2 = NULL;
+	char * port_c = NULL;
+	int size = 0;
+	url = pt;
+
+	fprintf(stderr, "url is: %s\n", url);
+
+	if (*pt == '/') {	// use default localhost and 9418
+		*host = "localhost";
+		*port = 9418;
+		url = pt + 1;
+	} else {
+		pt = strchr(pt, ':');
+		pt2 = strchr(pt, '/');
+
+		if (!pt2 || !pt || pt > pt2)	// both these characters should exist
+			return 0;
+
+		// there is a : before /, which means we have a port number
+		size = pt - url;
+		if (size < 1)
+			return 0;
+
+		*host = (char*)malloc(size + 1);
+		strncpy(*host, url, size);
+		(*host)[size] = '\0';
+
+		url = pt + 1;	// url past the /
+		size = pt2 - url;
+		if (size < 1)
+			return 0;
+
+		// rest is port number
+		port_c = (char*)malloc(size + 1);
+		strncpy(port_c, url, size);
+		*port = atoi(port_c);
+		free(port_c);
+
+		url = pt2 + 1;
+	}
+
+	// parse projectname and pgpkey
+	pt = strchr(url, ':');
+
+	if (pt) {
+		*projname = (char*)malloc(pt - url + 1);
+		strncpy(*projname, url, pt-url);
+
+		pt++;
+		
+		if (strlen(pt) > sizeof(signingkey))
+			return error("signingkey too long");
+
+		strcpy(signingkey, pt);
+	} else {
+		// signingkey is the default one
+		
+		*projname = (char*)malloc(strlen(url) + 1);
+		strcpy(*projname, url);
+
+		set_default_signingkey();
+	}
+
+
+	return 1;
+}
+
+int gidit_push(const char * url, unsigned int flags)
+{
+	char * host = NULL;
+	char * projname = NULL;
+	int port;
 	int sock;
-	char * host = "127.0.0.1";
-	int port = 9418;
 	struct sockaddr_in addr;
 	struct strbuf msg = STRBUF_INIT;
 	struct strbuf pgp_key = STRBUF_INIT;
@@ -1005,6 +1077,9 @@ int gidit_push(const char * projname, const char *signingkey, unsigned int flags
 	struct gidit_pushobj po_new = PO_INIT;
 	FILE * fd;
 	uint32_t len = 0;
+
+	if (!parse_url(url, &host, &port, &projname))
+		die("Error parsing url");
 
 	if (get_public_key(&pgp_key, signingkey) != 0)
 		exit(1);
