@@ -56,9 +56,9 @@ static int base_path_test(const char * basepath)
 int cmd_gidit(int argc, const char **argv, const char *prefix)
 {
 	int flags = 0;
-	int tags = 0, init = 0, verbose = 0, pushobj = 0, updatepl = 0, sign = 0,
+	int init = 0, verbose = 0, pushobj = 0, updatepl = 0, sign = 0,
 		proj_init = 0, polist = 0, store_bundle = 0, get_bundle = 0, pobj_val = 0,
-		force = 0, create_bundle = 0, send = 0, push = 0;
+		create_bundle = 0, send = 0, push = 0;
 
 	const char *basepath = NULL;
 	const char *keyid = NULL;
@@ -72,8 +72,8 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 	struct option options[] = {
 		OPT__VERBOSE(&verbose),
 		OPT_GROUP(""),
-		OPT_BOOLEAN( 0 , "tags", &tags, "include tags"),
-		OPT_BOOLEAN( 0 , "force", &force, "force"),
+		OPT_BIT( 0 , "tags", &flags, "include tags", INCLUDE_TAGS),
+		OPT_BIT( 0 , "force", &flags, "force", TRANSPORT_PUSH_FORCE),
 		OPT_BOOLEAN('s', NULL, &sign, "annotated and GPG-signed tag"),
 		OPT_STRING('u', NULL, &keyid, "key-id",
 					"use another key to sign the tag"),
@@ -112,10 +112,6 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		set_default_signingkey();
 	}
 
-	if (tags)
-		flags |= INCLUDE_TAGS;
-	if (force)
-		flags |= FORCE;
 	if (sign)
 		flags |= SIGN;
 

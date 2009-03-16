@@ -1087,7 +1087,7 @@ int gidit_push(const char * url, unsigned int flags)
 	sock = connect_to_daemon(&addr, host, port);
 
 	// [message type][pgp len][pgp key][projectname]
-	if (flags & FORCE)
+	if (flags & TRANSPORT_PUSH_FORCE)
 		strbuf_addch(&msg, GIDIT_PUSHF_MSG);
 	else
 		strbuf_addch(&msg, GIDIT_PUSH_MSG);
