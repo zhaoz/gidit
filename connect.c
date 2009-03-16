@@ -153,6 +153,7 @@ enum protocol {
 	PROTO_LOCAL = 1,
 	PROTO_SSH,
 	PROTO_GIT,
+	PROTO_GIDIT,
 };
 
 static enum protocol get_protocol(const char *name)
@@ -167,6 +168,8 @@ static enum protocol get_protocol(const char *name)
 		return PROTO_SSH;
 	if (!strcmp(name, "file"))
 		return PROTO_LOCAL;
+	if (!strcmp(name, "gidit"))
+		return PROTO_GIDIT;
 	die("I don't handle protocol '%s'", name);
 }
 
