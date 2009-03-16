@@ -260,14 +260,22 @@ static int execute(struct sockaddr *addr)
 			char * pgp_key;
 			struct strbuf project_name = STRBUF_INIT;
 			uint32_t pgp_len;
-			safe_read(0,&pgp_len,sizeof(uint32_t));
+
+			safe_read(0, &pgp_len, sizeof(uint32_t));
+
 			pgp_len = ntohl(pgp_len);
 			pgp_key = (char*)malloc(pgp_len);
+
 			logerror("Saferead");
-			safe_read(0,pgp_key,pgp_len);
+
+			safe_read(0, pgp_key, pgp_len);
+
 			logerror("strbufread");
-			strbuf_read(&project_name,0,20);
+
+			strbuf_getline(&project_name, stdin, '\0');
+
 			logerror("Pushing project %s",project_name.buf);
+
 			break;
 		default:
 			die("Invalid input flag %d",(int)flag);

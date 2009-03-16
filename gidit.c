@@ -1026,7 +1026,7 @@ int gidit_push(const char * projname, const char *signingkey, unsigned int flags
 	strbuf_addstr(&msg, projname);
 
 	// send message to the daemon
-	if (write(sock, msg.buf, msg.len) != msg.len)
+	if (write(sock, msg.buf, msg.len + 1) != msg.len)
 		die("Error communicating with gidit daemon");
 
 	strbuf_release(&msg);
