@@ -32,7 +32,8 @@ test_expect_success 'pushobject generation should work, unsigned' '
 '
 
 test_expect_success 'userdir not inited, should not be able to updatepl' '
-	(cat $TEST_DIRECTORY/t9800/pgp_sha1 && echo "$PROJ_NAME" && cat $TEST_DIRECTORY/t9800/pushobj) | git gidit --updatepl -b $GIDIT_DIR; 
+	(cat $TEST_DIRECTORY/t9800/pgp_sha1 && echo "$PROJ_NAME" && cat $TEST_DIRECTORY/t9800/pushobj) |
+		git gidit --updatepl -b $GIDIT_DIR; 
 	test $? -ne 0
 '
 
