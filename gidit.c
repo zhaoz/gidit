@@ -1004,7 +1004,7 @@ int gidit_push(const char * projname, const char *signingkey, unsigned int flags
 	struct gidit_pushobj po = PO_INIT;
 	struct gidit_pushobj po_new = PO_INIT;
 	FILE * fd;
-	uint32_t pgp_key_len = 0;
+	uint32_t len = 0;
 
 	if (get_public_key(&pgp_key, signingkey) != 0)
 		exit(1);
@@ -1017,8 +1017,8 @@ int gidit_push(const char * projname, const char *signingkey, unsigned int flags
 	else
 		strbuf_addch(&msg, GIDIT_PUSH_MSG);
 
-	pgp_key_len = htonl(pgp_key.len);
-	strbuf_add(&msg, &pgp_key_len, sizeof(uint32_t));
+	len = htonl(pgp_key.len);
+	strbuf_add(&msg, &len, sizeof(uint32_t));
 	strbuf_add(&msg, pgp_key.buf, pgp_key.len);
 
 	strbuf_release(&pgp_key);
@@ -1053,7 +1053,9 @@ int gidit_push(const char * projname, const char *signingkey, unsigned int flags
 	// send the bundle and the new pobj off
 	print_pushobj(fd, &po_new);
 
-	if (fwrite(msg.buf, msg.len, 1, fd) != 1)
+	len = htonl(msg.len);
+	if (fwrite(&len, sizeof(uint32_t), 1, fd) != 1 || 
+			fwrite(msg.buf, msg.len, 1, fd) != 1)
 		die("Failed to send bundle");
 
 	pobj_release(&po_new);
