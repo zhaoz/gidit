@@ -716,6 +716,41 @@ static int is_file(const char *url)
 	return S_ISREG(buf.st_mode);
 }
 
+struct gidit_transport_data {
+	struct child_process *conn;
+	int fd[2];
+};
+
+static int gidit_transport_push(struct transport *transport, int refspec_nr, const char **refspec, int flags)
+{
+	return 0;
+}
+
+static struct ref *get_refs_via_gidit(struct transport *transport)
+{
+	// struct gidit_transport_data *data = transport->data;
+	struct ref *refs;
+
+	// connect_setup(transport);
+	// get_remote_heads(data->fd[0], &refs, 0, NULL, 0, NULL);
+
+	return refs;
+}
+
+static int disconnect_gidit(struct transport *transport)
+{
+	struct gidit_transport_data *data = transport->data;
+	if (data->conn) {
+		packet_flush(data->fd[1]);
+		close(data->fd[0]);
+		close(data->fd[1]);
+		finish_connect(data->conn);
+	}
+
+	free(data);
+	return 0;
+}
+
 struct transport *transport_get(struct remote *remote, const char *url)
 {
 	struct transport *ret = xcalloc(1, sizeof(*ret));
@@ -746,6 +781,13 @@ struct transport *transport_get(struct remote *remote, const char *url)
 		ret->get_refs_list = get_refs_from_bundle;
 		ret->fetch = fetch_refs_from_bundle;
 		ret->disconnect = close_bundle;
+	} else if (!prefixcmp(url, "gidit://")) {
+		struct gidit_transport_data *data = xcalloc(1, sizeof(*data));
+		ret->get_refs_list = get_refs_via_gidit;
+		ret->data = data;
+
+		ret->push = gidit_transport_push;
+		ret->disconnect = disconnect_gidit;
 
 	} else {
 		struct git_transport_data *data = xcalloc(1, sizeof(*data));
