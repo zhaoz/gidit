@@ -161,8 +161,10 @@ static void dht_del (Key * k, Message * m)
 		push_obj = gidit_po_list(base_path, sha1_to_hex(sha1), proj_name);
 
 		if (!push_obj) {
-			rmessage = (return_message*) malloc (sizeof(return_message));
 			rmessage->return_val = htonl(1);
+			if(message->force)
+				rmessage->return_val = htonl(0);
+			rmessage = (return_message*) malloc (sizeof(return_message));
 		} else {
 			return_size = strlen(push_obj) + 1;
 			rmessage = (return_message*) malloc (sizeof(return_message) + return_size + message->name_len);
@@ -360,7 +362,6 @@ static int execute(struct sockaddr *addr)
 	switch ((int)flag) {
 		case GIDIT_PUSHF_MSG:
 			force_push = 1;
-			break;
 		case GIDIT_PUSH_MSG:
 
 			safe_read(0, &pgp_len, sizeof(uint32_t));
