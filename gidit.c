@@ -1084,6 +1084,7 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
 	char * host = NULL;
 	char * projname = NULL;
 	int port;
+	char force = !!(flags & TRANSPORT_PUSH_FORCE);
 	int sock;
 	struct sockaddr_in addr;
 	struct strbuf msg = STRBUF_INIT;
@@ -1102,7 +1103,7 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
 	sock = connect_to_daemon(&addr, host, port);
 
 	// [message type][pgp len][pgp key][projectname]
-	if (flags & TRANSPORT_PUSH_FORCE)
+	if (force)
 		strbuf_addch(&msg, GIDIT_PUSHF_MSG);
 	else
 		strbuf_addch(&msg, GIDIT_PUSH_MSG);
@@ -1126,11 +1127,14 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
 	
 	// now receive the pushobject
 	fd = fdopen(sock, "r");
-	gidit_read_pushobj(fd, &po);
 
-	// verify the given pushobject
-	if (verify_pushobj(&po) != 0)
-		die("Failed push object verification");
+	if (!force) {
+		gidit_read_pushobj(fd, &po);
+
+		// verify the given pushobject
+		if (verify_pushobj(&po) != 0)
+			die("Failed push object verification");
+	}
 	
 	// create new pushobject and send it off
 	if (!gen_pushobj(&po_new, signingkey, flags))
