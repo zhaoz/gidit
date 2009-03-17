@@ -40,10 +40,8 @@ this folder called HEAD which would hold the most recent PushObject's
 SHA1. The SHA1 is calculated by the PushObject contents excluding the
 pgp signature, (only the SHA1s and their references).
 
-Bundles would be stored similar to how git stores objects. A folder 
-of the two char SHA1 prefix, followed by a folder consisting of the 
-rest of the SHA1 hash. The bundle would be stored inside of the folder 
-with the name of the end SHA1.
+Bundles are stored with the start sha1 followed by an end sha1 folder, with
+the actual bundle saved in a file named with the SHA1 of the bundle.
 
 ./bundles/[PushObj Start SHA1]/[PushObj End SHA1]/[SHA1 of Bundle]
 
