@@ -26,7 +26,7 @@ static int gen_bundle(struct strbuf *bun, const char * from, const char * to)
 {
 	struct child_process rls;
 	int len;
-	const char **argv = xmalloc(6 * sizeof(const char *));
+	char **argv = xmalloc(6 * sizeof(char *));
 	
 	// generate bundle
 	memset(&rls, 0, sizeof(rls));
@@ -39,7 +39,7 @@ static int gen_bundle(struct strbuf *bun, const char * from, const char * to)
 
 	sprintf(argv[4], "%s..%s", from, to);
 
-	rls.argv = argv;
+	rls.argv = (const char**)argv;
 	rls.out = -1;
 	rls.git_cmd = 1;
 
