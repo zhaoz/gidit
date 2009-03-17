@@ -255,7 +255,7 @@ static int do_sign(struct strbuf * sig, struct strbuf *buffer,
 	return 0;
 }
 
-static void free_projdir(struct gidit_projdir* pd)
+void free_projdir(struct gidit_projdir* pd)
 {
 	if (pd->basepath)
 		free(pd->basepath);
@@ -1199,3 +1199,101 @@ int gidit_update_pushobj_list(struct gidit_projdir * pd, int num_po, struct gidi
 
 	return 0;
 }
+
+const char * str_to_pushobj(const char *buf, struct gidit_pushobj * po)
+{
+	struct string_list list;
+	char head = 0;
+	const char * pt = NULL;
+	char * cbuf = NULL;
+	int size = 0, ii = 0;
+	struct strbuf sig = STRBUF_INIT;
+
+	pushobj_release(po);
+	memset(&list, 0, sizeof(struct string_list));
+	memset(po->head, 0, 40);
+
+	// get first line
+	while ((pt = strchr(buf, '\n')) != NULL) {
+		// buf -> pt is one line
+		if (strncmp(buf, PGP_SIGNATURE, strlen(PGP_SIGNATURE)) == 0)
+			break;
+
+		// check to see if it is the HEAD ref
+		if (strncmp(buf + 41, "HEAD", 4) == 0) {
+			strncpy(po->head, buf, 40);
+			head = 1;
+			continue;
+		}
+
+		size = pt - buf;
+		cbuf = (char*)malloc(size + 1);
+		strncpy(cbuf, buf, size);
+		cbuf[size] = '\0';
+		string_list_append(cbuf, &list);
+	}
+
+	if (!head)
+		die("pushobject did not contain HEAD ref");
+
+	po->lines = list.nr;
+	po->refs = (char**)malloc(sizeof(char*) * list.nr);
+
+	// copy string list over to the pushobject
+	for (ii = 0; ii < list.nr; ii++) {
+		po->refs[ii] = (char*)malloc(strlen(list.items[ii].string) + 1);
+		strcpy(po->refs[ii], list.items[ii].string);
+	}
+
+	// rest of the stuff is signature
+	// handle sig stuff buf-> pt should hold first line of sig right now
+	do {
+		strbuf_add(&sig, buf, pt - buf);
+		strbuf_addstr(&sig, "\n");
+		if (strncmp(buf, END_PGP_SIGNATURE, strlen(END_PGP_SIGNATURE)) == 0)
+			break;
+	} while ((pt = strchr(buf, '\n')) != NULL);
+
+	po->signature = (char*)malloc(sig.len);
+	strcpy(po->signature, sig.buf);
+
+	memset(po->prev, 0, 40);
+	
+	// now the rest of the stuff is the prev pointer
+	/*if (strbuf_getline(&buf, fp, '\n') != EOF) {
+		strncpy(po->prev, buf.buf, 40);
+		po->prev[40] = '\0';
+	} */
+
+	strbuf_release(&sig);
+	string_list_clear(&list, 0);
+
+	return pt + 1;
+}
+
+int str_to_polist(const char * buf, struct gidit_pushobj ***polist)
+{
+	int nr = 0;
+	int size = 4; // start with 4
+	const char * pt = buf;
+
+	*polist = (struct gidit_pushobj **)malloc(sizeof(struct gidit_pushobj *) * size);
+
+	while (1) {
+		if (nr == size) {
+			size += 4;
+			*polist = realloc(*polist, sizeof(struct gidit_pushobj *) * size);
+		}
+
+		struct gidit_pushobj * po = (struct gidit_pushobj *)malloc(sizeof(struct gidit_pushobj));
+
+		pt = str_to_pushobj(pt, po);
+		(*polist)[nr] = po;
+
+		nr++;
+	}
+
+
+	return nr;
+}
+

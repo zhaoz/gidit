@@ -64,6 +64,8 @@ struct gidit_pushobj {
 
 struct gidit_projdir * new_projdir(const char * basepath, const char * sha1_hex, const char * projname);
 
+void free_projdir(struct gidit_projdir* pd);
+
 /**
  * Generate a pushobj, which is a list of all refs including HEAD, and
  * excluding stashes and remotes
@@ -132,5 +134,16 @@ int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po);
  * Updates projdirs polist, and verifies that it has a subset
  */
 int gidit_update_pushobj_list(struct gidit_projdir * pd, int num_po, struct gidit_pushobj ** polist);
+
+/**
+ * Given a buffer containing a pushobj, construct po, and return pointer in buf after pushobj
+ */
+const char * str_to_pushobj(const char *buf, struct gidit_pushobj * po);
+
+/**
+ * Take a buf, and a pointer to a **polist, from buf, construct a whole bunch of polist items
+ * return the number created
+ */
+int str_to_polist(const char * buf, struct gidit_pushobj ***polist);
 
 #endif		// GIDIT_H
