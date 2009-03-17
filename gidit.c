@@ -113,7 +113,7 @@ static int get_public_key(struct strbuf *buffer, const char * signingkey)
 }
 
 
-static void pobj_release(struct gidit_pushobj *po)
+static void pushobj_release(struct gidit_pushobj *po)
 {
 	int ii;
 	for (ii = 0; ii < po->lines; ii++)
@@ -388,7 +388,7 @@ static int gen_pushobj(struct gidit_pushobj * po, const char *signingkey,
 	int ii;
 	unsigned char head_sha1[20];
 
-	pobj_release(po);
+	pushobj_release(po);
 
 	memset(&list, 0, sizeof(struct string_list));
 	memset(po->head, 0, 40);
@@ -532,14 +532,14 @@ static int append_pushobj(struct gidit_projdir  * pd, struct strbuf * pobj,
 /**
  * Given sha1, look up pushobj and return it
  */
-static int sha_to_pushobj(struct gidit_pushobj *po, const struct gidit_projdir  *pd, 
+static int sha1_to_pushobj(struct gidit_pushobj *po, const struct gidit_projdir  *pd, 
 						const char * sha1)
 {
 	FILE * fp;
 	char * path = NULL;
 
 	if (strncmp(sha1, END_SHA1, 40) == 0)
-		die("Invalid sha1");
+		return error("Invalid sha1");
 
 	path = malloc(strlen(pd->projdir) + 1 + 40 + 1);
 	sprintf(path, "%s/%s", pd->projdir, sha1);
@@ -747,16 +747,16 @@ char * gidit_po_list(const char * basepath, const char * pgp_sha1, const char * 
 	
 	// grab pushobjects and dump them out
 	// start with the head pushobj
-	if ((rc = sha_to_pushobj(&po, pd, pd->head)) != 0)
+	if ((rc = sha1_to_pushobj(&po, pd, pd->head)) != 0)
 		return NULL;
 	
 	strbuf_appendpushobj(&po_list, &po);
 
 	while (strncmp(po.prev, END_SHA1, 40) != 0 &&
-			(rc = sha_to_pushobj(&po, pd, po.prev)) == 0)
+			(rc = sha1_to_pushobj(&po, pd, po.prev)) == 0)
 		strbuf_appendpushobj(&po_list, &po);
 
-	pobj_release(&po);
+	pushobj_release(&po);
 
 	if (rc)
 		return NULL;
@@ -899,7 +899,7 @@ int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po)
 	struct strbuf sig = STRBUF_INIT;
 	struct string_list list;
 
-	pobj_release(po);
+	pushobj_release(po);
 
 	memset(&list, 0, sizeof(struct string_list));
 	memset(po->head, 0, 40);
@@ -967,7 +967,7 @@ int gidit_verify_pushobj(FILE *fp, unsigned int flags)
 
 	rc = verify_pushobj(&po);
 
-	pobj_release(&po);
+	pushobj_release(&po);
 
 	return rc;
 }
@@ -993,7 +993,7 @@ int gidit_gen_bundle(FILE *fp, unsigned int flags)
 	if (fwrite(bun.buf, bun.len, 1, stdout) != 1)
 		die("Failed to write out bundle");
 	
-	pobj_release(&po);
+	pushobj_release(&po);
 	strbuf_release(&bun);
 
 	return 0;
@@ -1143,9 +1143,9 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
 			fwrite(msg.buf, msg.len, 1, fd) != 1)
 		die("Failed to send bundle");
 
-	pobj_release(&po_new);
+	pushobj_release(&po_new);
 	strbuf_release(&msg);
-	pobj_release(&po);
+	pushobj_release(&po);
 
 	if (read_ack(sock) != 0)
 		die("Push failed");
