@@ -137,7 +137,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 	if (init)
 		rc = gidit_init(basepath);
 	else if (proj_init)
-		rc = gidit_proj_init(stdin, basepath, flags);
+		rc = gidit_proj_init_stream(stdin, basepath, flags);
 	else if (updatepl)
 		rc = gidit_update_pl(stdin, basepath, flags);
 	else if (polist)

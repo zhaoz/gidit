@@ -666,17 +666,58 @@ int gidit_update_pl(FILE *fp, const char * basepath, unsigned int flags)
 	return rc;
 }
 
-/**
- * Initialize user directories, takes PGP
- */
-int gidit_proj_init(FILE *fp, const char * basepath, unsigned int flags)
+int gidit_proj_init(const char * basepath, int pgp_len, 
+					const unsigned char * pgp_key, const char * projname, 
+					unsigned int flags)
 {
-	FILE * pgp_fp;
-	struct strbuf pgp_key = STRBUF_INIT;
-	struct strbuf proj_name = STRBUF_INIT;
 	unsigned char sha1[20];
 	char pgp_sha1[41];
 	git_SHA_CTX c;
+	FILE * pgp_fp;
+
+	// hash the pgp key
+	git_SHA1_Init(&c);
+	git_SHA1_Update(&c, pgp_key, pgp_len);
+	git_SHA1_Final(sha1, &c);
+
+	// change dir to pushobjects dir
+	if (chdir(basepath) || chdir(PUSHOBJ_DIR))
+		return error("Error going to pushobjects directory\n");
+
+	sprintf(pgp_sha1, "%s", sha1_to_hex(sha1));
+
+	if (safe_create_dir(pgp_sha1))
+		exit(1);
+
+	chdir(pgp_sha1);
+
+	// now ensure the project directories existence
+	if (safe_create_dir(projname))
+		exit(1);
+
+	// if pgp key file already exists, not need to resave
+	if (access("PGP", F_OK)) {
+		// save the PGP key in there
+		pgp_fp = fopen("PGP", "w");
+
+		if (!pgp_fp)
+			die("Error while saving PGP key");
+
+		fwrite(pgp_key, pgp_len, 1, pgp_fp);
+
+		fclose(pgp_fp);
+	}
+
+	return 0;
+}
+
+/**
+ * Initialize user directories, takes PGP
+ */
+int gidit_proj_init_stream(FILE *fp, const char * basepath, unsigned int flags)
+{
+	struct strbuf pgp_key = STRBUF_INIT;
+	struct strbuf proj_name = STRBUF_INIT;
 
 	strbuf_getline(&proj_name, fp, '\n');
 
@@ -694,43 +735,7 @@ int gidit_proj_init(FILE *fp, const char * basepath, unsigned int flags)
 		return error("Error while reading pgp_key");
 	}
 
-	// hash the pgp key
-	git_SHA1_Init(&c);
-	git_SHA1_Update(&c, pgp_key.buf, pgp_key.len);
-	git_SHA1_Final(sha1, &c);
-
-
-	// change dir to pushobjects dir
-	if (chdir(basepath) || chdir(PUSHOBJ_DIR))
-		return error("Error going to pushobjects directory\n");
-
-	sprintf(pgp_sha1, "%s", sha1_to_hex(sha1));
-
-	if (safe_create_dir(pgp_sha1))
-		exit(1);
-
-	chdir(pgp_sha1);
-
-	// now ensure the project directories existence
-	if (safe_create_dir(proj_name.buf))
-		exit(1);
-
-	// if pgp key file already exists, not need to resave
-	if (access("PGP", F_OK)) {
-		// save the PGP key in there
-		pgp_fp = fopen("PGP", "w");
-
-		if (!pgp_fp)
-			die("Error while saving PGP key");
-
-		fwrite(pgp_key.buf, pgp_key.len, 1, pgp_fp);
-
-		fclose(pgp_fp);
-	}
-	strbuf_release(&pgp_key);
-	strbuf_release(&proj_name);
-
-	return 0;
+	return gidit_proj_init(basepath, pgp_key.len, (unsigned char *)pgp_key.buf, proj_name.buf, flags);
 }
 
 char * gidit_po_list(const char * basepath, const char * pgp_sha1, const char * projname)
