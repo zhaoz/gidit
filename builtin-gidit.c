@@ -21,7 +21,6 @@ static const char * const gidit_usage[] = {
 	"echo <SHA1 Pobj Start><SHA1 Pobj End> | git gidit -b <base-path> --get-bundle",
 	"echo <SHA1 Pobj Start><SHA1 Pobj End><bundle> | git gidit -b <base-path> --store-bundle",
 	"echo <pushobj> | git gidit --verify-pobj",
-	"git gidit --send-message -k <key> -m <message>",
 	NULL,
 };
 
@@ -58,7 +57,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 	int flags = 0;
 	int init = 0, verbose = 0, pushobj = 0, updatepl = 0, sign = 0,
 		proj_init = 0, polist = 0, store_bundle = 0, get_bundle = 0, pobj_val = 0,
-		create_bundle = 0, send = 0, push = 0;
+		create_bundle = 0, push = 0;
 
 	const char *basepath = NULL;
 	const char *keyid = NULL;
@@ -78,7 +77,6 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		OPT_STRING('u', NULL, &keyid, "key-id",
 					"use another key to sign the tag"),
 		OPT_BOOLEAN( 0 , "pushobj", &pushobj, "generate push object"),
-		OPT_BOOLEAN( 0 , "send", &send, "send message to other node"),
 		OPT_STRING('k',NULL, &nodekey, "nodekey", "key of node"),
 		OPT_STRING('m',NULL, &message, "message", "message to send"),
 		OPT_STRING('p',NULL, &projname, "project-name", "Project name"),
@@ -123,8 +121,6 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		return !!gidit_pushobj(stdout, signingkey, flags);
 	else if (create_bundle)
 		return !!gidit_gen_bundle(stdin, flags);
-	else if (send)
-		return !!gidit_send_message(nodekey, message);
 	else if (push) {
 		url = (char*)malloc(strlen("gidit://127.0.0.1:9418/") + 
 				strlen(projname) + 1 + strlen(signingkey) + 1);

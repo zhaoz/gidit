@@ -980,35 +980,6 @@ int gidit_gen_bundle(FILE *fp, unsigned int flags)
 	return 0;
 }
 
-int gidit_send_message(char * key, void * message)
-{
-    int sock;                        /* Socket descriptor */
-    struct sockaddr_in daemonAddr;
-    unsigned short daemonPort;
-    char *daemonIP;                    /* Server IP address (dotted quad) */
-    char buf[256];     /* Buffer for echo string */
-    int strLen;
-
-    daemonIP = "127.0.0.1";             /* First arg: server IP address (dotted quad) */
-    daemonPort = 9418;
-
-	sock = connect_to_daemon(&daemonAddr, daemonIP, daemonPort);
-
-    /* Format outgoing buffer*/
-    strcpy(buf,"git-send ");
-    strcat(buf, TEST_DIR);
-    strLen = strlen(buf);
-    strcpy(buf+strLen+1,key);
-
-    /* Send the key to the server */
-    packet_write(sock, buf);
-    packet_write(sock, key);
-    packet_write(sock, message);
-
-    close(sock);
-    return 0;
-}
-
 static int parse_url(const char *url, char ** host, int * port, 
 						char ** projname)
 {

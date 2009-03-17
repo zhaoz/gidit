@@ -108,8 +108,6 @@ int gidit_verify_pushobj(FILE *fp, unsigned int flags);
  */
 int gidit_gen_bundle(FILE *fp, unsigned int flags);
 
-int gidit_send_message(char * key, void * message);
-
 /**
  * push stuff out to DHT
  */
