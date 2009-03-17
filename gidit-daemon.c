@@ -135,14 +135,13 @@ static void dht_fwd (Key ** kp, Message ** mp, ChimeraHost ** hp)
 
 static void dht_del (Key * k, Message * m)
 {
-	logerror("deliver\n");
 	if (m->type == SEND_PUSH) {
 		push_message * message = (push_message *) m->payload;
 		return_message * rmessage;
 		char *push_obj = NULL;
 		int return_size = 0;
 
-		logerror("Received message:\n\tPID:%d\n\tPROJ:%s",message->pid,message->name);
+		logerror("Received message:\n\tPID:%d\n\tPROJ:%s\n\tSHA1:%s",message->pid,message->name,sha1_to_hex(message->pgp));
 
 		//Find pobj list given message->pgp and message->name
 		//If its not there, set the return_val to 0
@@ -161,8 +160,7 @@ static void dht_del (Key * k, Message * m)
 			memcpy(rmessage->buf + message->name_length, push_obj, return_size);
 			free(push_obj);
 		}
-
-		logerror("doing a chimera_send");
+		rmessage->pid = message->pid;
 
 		chimera_send(chimera_state, message->source, RETURN_PUSH, sizeof(return_message)+return_size, (char*)rmessage);
 	} else if (m->type == RETURN_PUSH) {
@@ -359,7 +357,6 @@ static int execute(struct sockaddr *addr)
 			safe_read(0, pgp_key, pgp_len);
 
 			strbuf_getline(&project_name, stdin, '\0');
-
 			ret = dht_push(force_push, project_name.buf, pgp_key, &push_obj);
 
 			if (ret == -1) {
