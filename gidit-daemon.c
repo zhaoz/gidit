@@ -116,7 +116,7 @@ void signal_two(int sig){
 	push_returned= 2;
 }
 
-static void test_fwd (Key ** kp, Message ** mp, ChimeraHost ** hp)
+static void dht_fwd (Key ** kp, Message ** mp, ChimeraHost ** hp)
 {
 	/*Key *k = *kp;
 	Message *m = *mp;
@@ -133,7 +133,7 @@ static void test_fwd (Key ** kp, Message ** mp, ChimeraHost ** hp)
 	}*/
 }
 
-static void test_del (Key * k, Message * m)
+static void dht_del (Key * k, Message * m)
 {
 	if (m->type == SEND_PUSH) {
 		push_message * message = (push_message *) m->payload;
@@ -153,26 +153,54 @@ static void test_del (Key * k, Message * m)
 		}
 		else{
 			return_size = strlen(push_obj) + 1;
-			rmessage = (return_message*) malloc (sizeof(return_message)+return_size);
+			rmessage = (return_message*) malloc (sizeof(return_message) + return_size + message->name_length);
 			rmessage->return_val = 1;
-			rmessage->buf_len = return_size;
-			strncpy(rmessage->buf,push_obj,return_size);
+			rmessage->buf_len = return_size + message->name_length;
+			memcpy(rmessage->pgp, message->pgp, sizeof(rmessage->pgp));
+			memcpy(rmessage->buf, message->name, message->name_length);
+			memcpy(rmessage->buf + message->name_length, push_obj, return_size);
 			free(push_obj);
 		}
 
 		chimera_send(chimera_state, message->source, RETURN_PUSH, sizeof(return_message)+return_size, (char*)rmessage);
 	} else if (m->type == RETURN_PUSH) {
-		return_message message;
-		message = *((return_message *)m->payload);
+		return_message * message;
+		message = (return_message *)m->payload;
 
-		if(message.return_val == 0)
-			kill(message.pid, SIGUSR1);
-		if(message.return_val == 1)
-			kill(message.pid, SIGUSR2);
+		if(message->return_val == 0)
+			//Tell the handler that there is push_obj, go home
+			kill(message->pid, SIGUSR1);
+		if(message->return_val == 1)
+			//Parse the payload
+			char * proj_name = message->buf;
+			int proj_name_len = strlen(message->buf) + 1;
+			char * po_list = message->buf + proj_name_len;
+			//Make a projdir
+			struct gidit_projdir *proj_dir = new_projdir(base_path, sha1_to_hex(message->pgp),proj_name);
+
+			//Turn char *po list to num_po and **polist
+			int num_po = 0;
+			int null_index = 0;
+			struct gidit_pushobj **polist = NULL;
+			//while(null_index < message->buf_len){
+			//	num_po++;
+			//
+			//	INPUT ZILING MAGIC
+			//
+			//}
+			//Save the push_obj in the appropriate place
+			if(gidit_update_pushobj_list(struct gidit_projdir * pd, int num_po, struct gidit_pushobj ** polist)){
+				//Failure
+				logerror("gidit_update_pushobj_list failed");
+				kill(message->pid, SIGUSR1);
+			}else{
+				//Tell the handler I'm done.
+				kill(message->pid, SIGUSR2);
+			}
 	}
 }
 
-static void test_update (Key * k, ChimeraHost * h, int joined)
+static void dht_update (Key * k, ChimeraHost * h, int joined)
 {
 	if (joined) {
 		fprintf(stderr, "Node %s:%s:%d joined neighbor set\n", k->keystr,
@@ -214,9 +242,9 @@ static void gidit_daemon_init(char * bootstrap_addr, int bootstrap_port, int loc
 	sigaction(SIGUSR2, &usr_action2, NULL);
 
 	/*    Place upcalls here    */
-	chimera_forward (chimera_state, test_fwd);
-	chimera_deliver (chimera_state, test_del);
-	chimera_update (chimera_state, test_update);
+	chimera_forward (chimera_state, dht_fwd);
+	chimera_deliver (chimera_state, dht_del);
+	chimera_update (chimera_state, dht_update);
 	chimera_setkey (chimera_state, key);
 	chimera_register (chimera_state, SEND_PUSH, 1);
 	chimera_register (chimera_state, RETURN_PUSH, 1);
@@ -339,9 +367,9 @@ static int execute(struct sockaddr *addr)
 			if (ret == -1) {
 				logerror("Failed to send dht message");
 			} else if (ret == 0) {
-				logerror("Push object found");
+				logerror("No Pushobject Found");
 			} else if (ret == 1) {
-				logerror("No Push object found");
+				logerror("Push object found");
 			}
 			break;
 		default:

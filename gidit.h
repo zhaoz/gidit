@@ -47,6 +47,7 @@ typedef struct push_m {
 typedef struct return_m {
 	int pid;
 	int return_val;
+	unsigned char pgp[20];
 	int buf_len;
 	char buf[];
 } return_message;
