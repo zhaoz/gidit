@@ -578,6 +578,10 @@ static int sha1_to_pushobj(struct gidit_pushobj *po, const struct gidit_projdir 
 	return 0;
 }
 
+/**
+ * Look at given pushobj, and check to see if all references are known
+ * returns 0 if all known, 1 if there are unknown
+ */
 static int verify_pushobj(struct gidit_pushobj *po)
 {
 	int ii;
@@ -592,12 +596,12 @@ static int verify_pushobj(struct gidit_pushobj *po)
 	// for each ref, verify its existence
 	cm = lookup_commit_reference_gently(sha1, 1);
 	if (!cm)
-		die("Failed verification");
+		return 1;
 	
 	for (ii = 0; ii < po->lines; ++ii) {
 		get_sha1_hex(po->refs[ii], sha1);
 		if (!lookup_commit_reference_gently(sha1, 1))
-			die("Failed verification");
+			return 1;
 	}
 
 	return 0;
@@ -1227,7 +1231,6 @@ const char * str_to_pushobj(const char *buf, struct gidit_pushobj * po)
 
 	pushobj_release(po);
 	memset(&list, 0, sizeof(struct string_list));
-	memset(po->head, 0, 40);
 
 	// get first line
 	while ((pt = strchr(buf, '\n')) != NULL) {
@@ -1249,9 +1252,13 @@ const char * str_to_pushobj(const char *buf, struct gidit_pushobj * po)
 		string_list_append(cbuf, &list);
 	}
 
-	if (!head)
-		die("pushobject did not contain HEAD ref");
-
+	if (!head || !list.nr) {
+		// do some clean up
+		strbuf_release(&sig);
+		string_list_clear(&list, 0);
+		return NULL;
+	}
+	
 	po->lines = list.nr;
 	po->refs = (char**)malloc(sizeof(char*) * list.nr);
 
@@ -1274,12 +1281,6 @@ const char * str_to_pushobj(const char *buf, struct gidit_pushobj * po)
 	strcpy(po->signature, sig.buf);
 
 	memset(po->prev, 0, 40);
-	
-	// now the rest of the stuff is the prev pointer
-	/*if (strbuf_getline(&buf, fp, '\n') != EOF) {
-		strncpy(po->prev, buf.buf, 40);
-		po->prev[40] = '\0';
-	} */
 
 	strbuf_release(&sig);
 	string_list_clear(&list, 0);
@@ -1293,17 +1294,23 @@ int str_to_polist(const char * buf, struct gidit_pushobj ***polist)
 	int size = 4; // start with 4
 	const char * pt = buf;
 
-	*polist = (struct gidit_pushobj **)malloc(sizeof(struct gidit_pushobj *) * size);
+	*polist = (struct gidit_pushobj **)xmalloc(sizeof(struct gidit_pushobj *) * size);
 
 	while (1) {
 		if (nr == size) {
 			size += 4;
-			*polist = realloc(*polist, sizeof(struct gidit_pushobj *) * size);
+			*polist = xrealloc(*polist, sizeof(struct gidit_pushobj *) * size);
 		}
 
 		struct gidit_pushobj * po = (struct gidit_pushobj *)malloc(sizeof(struct gidit_pushobj));
 
 		pt = str_to_pushobj(pt, po);
+
+		if (!pt) {
+			*polist = xrealloc(*polist, sizeof(struct gidit_pushobj *) * nr);
+			break;
+		}
+
 		(*polist)[nr] = po;
 
 		nr++;

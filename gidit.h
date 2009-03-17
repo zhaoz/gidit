@@ -110,10 +110,9 @@ int gidit_store_bundle(FILE *fp, const char * basepath, unsigned int flags);
 int gidit_get_bundle(FILE *fp,  FILE * out, const char * basepath, unsigned int flags);
 
 /**
- * Verify if a pushobject would apply cleanly to repo
+ * Verify if all refs in pushobject are known
  */
 int gidit_verify_pushobj(FILE *fp, unsigned int flags);
-
 
 /**
  * Generate a bundle read from stdin
