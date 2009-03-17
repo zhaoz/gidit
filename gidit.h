@@ -81,7 +81,8 @@ int gidit_init(const char *path);
 /**
  * Initialize a user's project directory
  */
-int gidit_proj_init(FILE *fp, const char * basepath, unsigned int flags);
+int gidit_proj_init(const char * basepath, int pgp_len, const unsigned char * pgp_key, const char * projname, unsigned int flags);
+int gidit_proj_init_stream(FILE *fp, const char * basepath, unsigned int flags);
 
 /**
  * Read pushobj from fp and save, will need to take
