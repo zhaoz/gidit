@@ -1104,7 +1104,7 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
 	strbuf_addstr(&msg, projname);
 
 	// send message to the daemon
-	if (write(sock, msg.buf, msg.len + 1) != msg.len)
+	if (write(sock, msg.buf, msg.len + 1) != msg.len+1)
 		die("Error communicating with gidit daemon");
 
 	strbuf_release(&msg);

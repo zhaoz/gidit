@@ -149,12 +149,12 @@ static void dht_del (Key * k, Message * m)
 
 		if(!push_obj){
 			rmessage = (return_message*) malloc (sizeof(return_message));
-			rmessage->return_val = 0;
+			rmessage->return_val = 1;
 		}
 		else{
 			return_size = strlen(push_obj) + 1;
 			rmessage = (return_message*) malloc (sizeof(return_message) + return_size + message->name_length);
-			rmessage->return_val = 1;
+			rmessage->return_val = 0;
 			rmessage->buf_len = return_size + message->name_length;
 			memcpy(rmessage->pgp, message->pgp, sizeof(rmessage->pgp));
 			memcpy(rmessage->buf, message->name, message->name_length);
@@ -167,10 +167,10 @@ static void dht_del (Key * k, Message * m)
 		return_message * message;
 		message = (return_message *)m->payload;
 
-		if(message->return_val == 0)
-			//Tell the handler that there is push_obj, go home
-			kill(message->pid, SIGUSR1);
-		if (message->return_val == 1) {
+		if(message->return_val == 1)
+			//Tell the handler that there is no push_obj, go home
+			kill(message->pid, SIGUSR2);
+		if (message->return_val == 0) {
 			//Parse the payload
 			char * proj_name = message->buf;
 			int proj_name_len = strlen(message->buf) + 1;
@@ -180,22 +180,16 @@ static void dht_del (Key * k, Message * m)
 
 			//Turn char *po list to num_po and **polist
 			int num_po = 0;
-			int null_index = 0;
 			struct gidit_pushobj **polist = NULL;
-			//while(null_index < message->buf_len){
-			//	num_po++;
-			//
-			//	INPUT ZILING MAGIC
-			//
-			//}
+			num_po = str_to_polist(po_list, &polist);
 			//Save the push_obj in the appropriate place
 			if (gidit_update_pushobj_list(proj_dir, num_po, polist)) {
 				//Failure
 				logerror("gidit_update_pushobj_list failed");
-				kill(message->pid, SIGUSR1);
+				kill(message->pid, SIGUSR2);
 			} else {
 				//Tell the handler I'm done.
-				kill(message->pid, SIGUSR2);
+				kill(message->pid, SIGUSR1);
 			}
 		}
 	}
@@ -252,7 +246,7 @@ static void gidit_daemon_init(char * bootstrap_addr, int bootstrap_port, int loc
 	chimera_join(chimera_state, host);
 }
 
-static int dht_push(char force, char *project_name, char *pgp_key, char* push_obj)
+static int dht_push(char force, char *project_name, char *pgp_key, char** push_obj)
 {
 	unsigned char sha1[20];
 	Key chimera_key;
@@ -286,6 +280,8 @@ static int dht_push(char force, char *project_name, char *pgp_key, char* push_ob
 	while(!push_returned){
 		sleep(1);
 	}
+
+	*push_obj = gidit_po_list(base_path, sha1_to_hex(message->pgp), message->name);
 
 	free(message);
 	return(push_returned-1);
@@ -363,14 +359,28 @@ static int execute(struct sockaddr *addr)
 
 			strbuf_getline(&project_name, stdin, '\0');
 
-			ret = dht_push(force_push, project_name.buf, pgp_key, push_obj);
+			ret = dht_push(force_push, project_name.buf, pgp_key, &push_obj);
 
 			if (ret == -1) {
 				logerror("Failed to send dht message");
-			} else if (ret == 0) {
-				logerror("No Pushobject Found");
 			} else if (ret == 1) {
-				logerror("Push object found");
+				char * message = "No Pushobject Found";
+				logerror(message);
+				if(write(0, &ret, sizeof(int)) != sizeof(int))
+					die("Error talking to client");
+				if(write(0, message, strlen(message)+1) != strlen(message)+1)
+					logerror("Error talking to client");
+				//write 1, no pushobject found
+			} else if (ret == 0) {
+				//write 0, send push object
+				char * message = "Pushobject Found";
+				logerror(message);
+				if(write(0, &ret, sizeof(int)) != sizeof(int))
+					die("Error talking to client");
+				if(write(0, message, strlen(message)+1) != strlen(message)+1)
+					die("Error talking to client");
+				if(write(0, push_obj, strlen(push_obj)+1) != strlen(push_obj) +1)
+					die("Error talking to client");
 			}
 			break;
 		default:
