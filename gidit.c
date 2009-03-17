@@ -278,15 +278,23 @@ void free_projdir(struct gidit_projdir* pd)
 static int read_ack(int fd)
 {
 	int status;
+	char ch;
 	struct strbuf msg = STRBUF_INIT;
 
 	// receive the ack
 	if (read(fd, &status, 1) != 1)
 		die("error reading ack");
 
-	strbuf_read(&msg, fd, 512);
-	if (msg.len)
+	while (read(fd, &ch, sizeof(char)) == 1) {
+		if (ch == '\0')
+			break;
+		strbuf_grow(&msg, 1);
+		msg.buf[msg.len++] = ch;
+	}
+	if (msg.len) {
+		msg.buf[msg.len] = '\0';
 		printf("%s\n", msg.buf);
+	}
 
 	strbuf_release(&msg);
 
