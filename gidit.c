@@ -767,7 +767,6 @@ char * gidit_po_list(const char * basepath, const char * pgp_sha1, const char * 
 	strcpy(pobuf, po_list.buf);
 	pobuf[po_list.len] = '\0';
 
-	fprintf(stderr, "mark\n");
 	strbuf_release(&po_list);
 
 	return pobuf;

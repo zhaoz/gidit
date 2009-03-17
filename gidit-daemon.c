@@ -135,6 +135,7 @@ static void dht_fwd (Key ** kp, Message ** mp, ChimeraHost ** hp)
 
 static void dht_del (Key * k, Message * m)
 {
+	logerror("deliver\n");
 	if (m->type == SEND_PUSH) {
 		push_message * message = (push_message *) m->payload;
 		return_message * rmessage;
@@ -147,11 +148,10 @@ static void dht_del (Key * k, Message * m)
 		//If its not there, set the return_val to 0
 		push_obj = gidit_po_list(base_path, sha1_to_hex(message->pgp), message->name);
 
-		if(!push_obj){
+		if (!push_obj) {
 			rmessage = (return_message*) malloc (sizeof(return_message));
 			rmessage->return_val = 1;
-		}
-		else{
+		} else {
 			return_size = strlen(push_obj) + 1;
 			rmessage = (return_message*) malloc (sizeof(return_message) + return_size + message->name_length);
 			rmessage->return_val = 0;
@@ -162,13 +162,14 @@ static void dht_del (Key * k, Message * m)
 			free(push_obj);
 		}
 
+		logerror("doing a chimera_send");
+
 		chimera_send(chimera_state, message->source, RETURN_PUSH, sizeof(return_message)+return_size, (char*)rmessage);
 	} else if (m->type == RETURN_PUSH) {
 		return_message * message;
 		message = (return_message *)m->payload;
 
-		if(message->return_val == 1)
-			//Tell the handler that there is no push_obj, go home
+		if (message->return_val == 1)	//Tell the handler that there is no push_obj, go home
 			kill(message->pid, SIGUSR2);
 		if (message->return_val == 0) {
 			//Parse the payload
@@ -277,11 +278,11 @@ static int dht_push(char force, char *project_name, char *pgp_key, char** push_o
 	
 	chimera_send (chimera_state, chimera_key, SEND_PUSH, sizeof(push_message)+name_length, (char*)message);
 
-	while(!push_returned){
+	while (!push_returned)
 		sleep(1);
-	}
-
-	*push_obj = gidit_po_list(base_path, sha1_to_hex(message->pgp), message->name);
+	
+	if (push_returned == 1)
+		*push_obj = gidit_po_list(base_path, sha1_to_hex(message->pgp), message->name);
 
 	free(message);
 	return(push_returned-1);
@@ -343,7 +344,7 @@ static int execute(struct sockaddr *addr)
 	char *push_obj = NULL;
 	struct strbuf project_name = STRBUF_INIT;
 	uint32_t pgp_len;
-	int ret;
+	char ret;
 	switch ((int)flag) {
 		case GIDIT_PUSHF_MSG:
 			force_push = 1;
@@ -366,16 +367,16 @@ static int execute(struct sockaddr *addr)
 			} else if (ret == 1) {
 				char * message = "No Pushobject Found";
 				logerror(message);
-				if(write(0, &ret, sizeof(int)) != sizeof(int))
+				if (write(0, &ret, sizeof(char)) != sizeof(char))
 					die("Error talking to client");
-				if(write(0, message, strlen(message)+1) != strlen(message)+1)
+				if (write(0, message, strlen(message)+1) != strlen(message)+1)
 					logerror("Error talking to client");
 				//write 1, no pushobject found
 			} else if (ret == 0) {
 				//write 0, send push object
 				char * message = "Pushobject Found";
 				logerror(message);
-				if(write(0, &ret, sizeof(int)) != sizeof(int))
+				if(write(0, &ret, sizeof(char)) != sizeof(char))
 					die("Error talking to client");
 				if(write(0, message, strlen(message)+1) != strlen(message)+1)
 					die("Error talking to client");
