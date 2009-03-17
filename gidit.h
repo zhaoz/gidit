@@ -37,18 +37,19 @@ typedef struct chat_m {
 } chat_message;
 
 typedef struct push_m {
-	int pid;
+	char force;
+	uint32_t pid;
 	Key source;
-	unsigned char pgp[20];
-	int name_length;
-	char name[];
+	uint32_t name_len;
+	uint32_t pgp_len;
+	char buf[];
 } push_message;
 
 typedef struct return_m {
-	int pid;
-	int return_val;
+	uint32_t pid;
+	uint32_t return_val;
 	unsigned char pgp[20];
-	int buf_len;
+	uint32_t buf_len;
 	char buf[];
 } return_message;
 

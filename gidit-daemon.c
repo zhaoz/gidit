@@ -136,12 +136,24 @@ static void dht_fwd (Key ** kp, Message ** mp, ChimeraHost ** hp)
 static void dht_del (Key * k, Message * m)
 {
 	if (m->type == SEND_PUSH) {
+		unsigned char sha1[20];
 		push_message * message = (push_message *) m->payload;
+		char * proj_name = message->buf;
+		char * pgp = message->buf + ntohl(message->name_len);
 		return_message * rmessage;
 		char *push_obj = NULL;
 		int return_size = 0;
+		git_SHA_CTX c;
 
-		logerror("Received message:\n\tPID:%d\n\tPROJ:%s\n\tSHA1:%s",message->pid,message->name,sha1_to_hex(message->pgp));
+		logerror("Received message:\n\tPID:%d\n\tPROJ:%s",ntohl(message->pid),proj_name);
+
+		if(message->force){
+			
+		}
+			//Create the directory
+			git_SHA1_Init(&c);
+			git_SHA1_Update(&c, pgp_key, pgp_key_len);
+			git_SHA1_Final(sha1, &c);
 
 		//Find pobj list given message->pgp and message->name
 		//If its not there, set the return_val to 0
@@ -245,36 +257,34 @@ static void gidit_daemon_init(char * bootstrap_addr, int bootstrap_port, int loc
 	chimera_join(chimera_state, host);
 }
 
-static int dht_push(char force, char *project_name, char *pgp_key, char** push_obj)
+static int dht_push(char force, char *project_name, uint32_t pgp_key_len, char *pgp_key, char** push_obj)
 {
 	unsigned char sha1[20];
 	Key chimera_key;
 	push_message * message;
-	git_SHA_CTX c, d;
-	int name_length = strlen(project_name)+1;
+	git_SHA_CTX c;
+	uint32_t name_length = strlen(project_name)+1;
 
 	ChimeraGlobal *chblob = (ChimeraGlobal *) chimera_state->chimera;
 
-	message = (push_message*)malloc(sizeof(push_message)+name_length);
+	message = (push_message*)malloc(sizeof(push_message) + name_length + pgp_key_len);
 
-	message->pid = getpid();
+	message->force = force;
+	message->pid = htonl(getpid());
 	key_assign(&(message->source),(chblob->me->key));
-	message->name_length = name_length; 
+	message->name_len = htonl(name_length);
+	message->pgp_len = htnol(pgp_key_len);
 
 	git_SHA1_Init(&c);
-	git_SHA1_Update(&c, pgp_key, strlen(pgp_key));
-	git_SHA1_Update(&c, project_name, strlen(project_name));
+	git_SHA1_Update(&c, pgp_key, pgp_key_len);
+	git_SHA1_Update(&c, project_name, name_length);
 	git_SHA1_Final(sha1, &c);
 	str_to_key(sha1_to_hex(sha1),&chimera_key);
 
+	memcpy(message->buf, project_name, name_length);
+	memcpy(message->buf + name_length, pgp_key, pgp_key_len);
 
-	git_SHA1_Init(&d);
-	git_SHA1_Update(&d, pgp_key, strlen(pgp_key));
-	git_SHA1_Final(sha1, &d);
-	memcpy(message->pgp, sha1, sizeof(message->pgp));
-	strncpy(message->name, project_name, message->name_length);
-	
-	chimera_send (chimera_state, chimera_key, SEND_PUSH, sizeof(push_message)+name_length, (char*)message);
+	chimera_send (chimera_state, chimera_key, SEND_PUSH, sizeof(push_message) + name_length + pgp_key_len, (char*)message);
 
 	while (!push_returned)
 		sleep(1);
@@ -357,7 +367,7 @@ static int execute(struct sockaddr *addr)
 			safe_read(0, pgp_key, pgp_len);
 
 			strbuf_getline(&project_name, stdin, '\0');
-			ret = dht_push(force_push, project_name.buf, pgp_key, &push_obj);
+			ret = dht_push(force_push, project_name.buf, pgp_key_len, pgp_key, &push_obj);
 
 			if (ret == -1) {
 				logerror("Failed to send dht message");
