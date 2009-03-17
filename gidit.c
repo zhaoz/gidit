@@ -501,6 +501,8 @@ static int append_pushobj(struct gidit_projdir  * pd, struct strbuf * pobj,
 	git_SHA1_Update(&c, pobj->buf, pobj->len);
 	git_SHA1_Final(sha1, &c);
 
+	fprintf(stderr, "1\n");
+
 	file_path = (char*)malloc(strlen(pd->projdir) + 40 + 1);
 	strcpy(sha1_hex, sha1_to_hex(sha1));
 	sprintf(file_path, "%s/%s", pd->projdir, sha1_hex);
@@ -508,10 +510,15 @@ static int append_pushobj(struct gidit_projdir  * pd, struct strbuf * pobj,
 	if (access(file_path, F_OK) == 0)
 		return error("Push object alread exists");
 
+	fprintf(stderr, "3\n");
 	pobj_fp = fopen(file_path, "w");
+	fprintf(stderr, "2\n");
 	fprintf(pobj_fp, "%s", pobj->buf);
+	fprintf(stderr, "4\n");
 	fprintf(pobj_fp, "%s", sig->buf);
+	fprintf(stderr, "5\n");
 	fprintf(pobj_fp, "%s PREV\n", pd->head);
+	fprintf(stderr, "6\n");
 	fclose(pobj_fp);
 
 	update_proj_head(pd, sha1_hex);
@@ -620,11 +627,16 @@ int gidit_update_pl(FILE *fp, const char * basepath, unsigned int flags)
 	if (!read_sha1(fp, pgp_sha1))
 		return error("pgpkey error: bad pushobject format");
 	
+	fprintf(stderr, "a\n");
+	
 	// next line is the project name
 	if (strbuf_getline(&proj_name, fp, '\n') == EOF)
 		return error("No projname: bad pushobject format");
+	fprintf(stderr, "b\n");
 
 	pd = new_projdir(basepath, pgp_sha1, proj_name.buf);
+
+	fprintf(stderr, "c\n");
 
 	if (!pd)
 		exit(1);
@@ -635,6 +647,7 @@ int gidit_update_pl(FILE *fp, const char * basepath, unsigned int flags)
 			break;
 		strbuf_addstr(&pobj, buf.buf);
 	}
+	fprintf(stderr, "d\n");
 
 	if (!buf.len)
 		return error("no pushobject given");
@@ -645,14 +658,17 @@ int gidit_update_pl(FILE *fp, const char * basepath, unsigned int flags)
 		buf.buf[buf.len++] = ch;
 		buf.buf[buf.len] = '\0';
 	}
+	fprintf(stderr, "b\n");
 
 	if (!(rc = append_pushobj(pd, &pobj, &buf)))
 		return rc;
+	fprintf(stderr, "f\n");
 
 	free_projdir(pd);
 	strbuf_release(&proj_name);
 	strbuf_release(&pobj);
 	strbuf_release(&buf);
+	fprintf(stderr, "g\n");
 
 	return rc;
 }
@@ -1044,7 +1060,7 @@ static int parse_url(const char *url, char ** host, int * port,
 	if (pt) {
 		*projname = (char*)malloc(pt - url + 1);
 		strncpy(*projname, url, pt-url);
-
+		(*projname)[pt-url] = '\0';
 		pt++;
 		
 		if (strlen(pt) > sizeof(signingkey))

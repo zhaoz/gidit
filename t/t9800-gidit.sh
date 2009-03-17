@@ -75,7 +75,7 @@ test_expect_success 'second projdir init should work' '
 '
 
 test_expect_success 'PushObject update should work' '
-	(echo -n $PGP_SHA1 && echo $PROJ_NAME && cat $TEST_DIRECTORY/t9800/pushobj) | git gidit --updatepl -b $GIDIT_DIR &&
+	(echo -n $PGP_SHA1 && echo $PROJ_NAME && cat $TEST_DIRECTORY/t9800/pushobj) | git gidit --updatepl -b $GIDIT_DIR 2> ../log &&
 	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD &&
 	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD`
 '

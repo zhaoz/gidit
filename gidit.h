@@ -36,6 +36,21 @@ typedef struct chat_m {
 	char message[1000];
 } chat_message;
 
+typedef struct push_m {
+	int pid;
+	Key source;
+	unsigned char pgp[20];
+	int name_length;
+	char name[];
+} push_message;
+
+typedef struct return_m {
+	int pid;
+	int return_val;
+	int buf_len;
+	char buf[];
+} return_message;
+
 struct gidit_pushobj {
 	int lines;
 	char ** refs;

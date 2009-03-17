@@ -86,18 +86,22 @@ static void NORETURN daemon_die(const char *err, va_list params)
 }
 
 //GIDIT-UPCALLS
-#define TEST_CHAT 15
-#define RETURN_CHAT 16
+#define SEND_PUSH 15
+#define RETURN_PUSH 16
 static ChimeraState * chimera_state;
-volatile sig_atomic_t return_interrupt = 0;
+volatile sig_atomic_t push_returned = 0;
 
-void signal_fun(int sig){
-	return_interrupt = 1;
+void signal_one(int sig){
+	push_returned= 1;
+}
+
+void signal_two(int sig){
+	push_returned= 2;
 }
 
 static void test_fwd (Key ** kp, Message ** mp, ChimeraHost ** hp)
 {
-	Key *k = *kp;
+	/*Key *k = *kp;
 	Message *m = *mp;
 	chat_message message;
 	message = *((chat_message *)m->payload);
@@ -109,19 +113,30 @@ static void test_fwd (Key ** kp, Message ** mp, ChimeraHost ** hp)
 		logerror("Routing RETURN ((%s)%u:%s) To %s\n",message.message,message.pid,get_key_string(&(message.source)),get_key_string(k));
 		//logerror("Routing RETURN (%s) to %u:%s\n",message.message,message.pid,get_key_string(&(message.source)));
 		//chimera_send(chimera_state, *k, RETURN_CHAT, sizeof(message), (char*)&message);
-	}
+	}*/
 }
 
 static void test_del (Key * k, Message * m)
 {
-	chat_message message;
-	message = *((chat_message *)m->payload);
-	if (m->type == TEST_CHAT) {
-		logerror("Delivered TEST (%s) from %u:%s\n",message.message,message.pid,get_key_string(&(message.source)));
-		chimera_send(chimera_state, message.source, RETURN_CHAT, sizeof(message), (char*)&message);
-	} else if (m->type == RETURN_CHAT) {
-		logerror("Delivered RETURN (%s) from %u:%s\n",message.message,message.pid,get_key_string(&(message.source)));
-		kill(message.pid, SIGUSR1);
+	if (m->type == SEND_PUSH) {
+		push_message message;
+		return_message rmessage;
+		message = *((push_message *)m->payload);
+
+		logerror("Received message:\n\tPID:%d\n\tPROJ:\n\t%s",message.pid,message.name);
+
+		rmessage.pid = message.pid;
+		rmessage.return_val = 0;
+
+		chimera_send(chimera_state, message.source, RETURN_PUSH, sizeof(rmessage), (char*)&rmessage);
+	} else if (m->type == RETURN_PUSH) {
+		return_message message;
+		message = *((return_message *)m->payload);
+
+		if(message.return_val == 0)
+			kill(message.pid, SIGUSR1);
+		if(message.return_val == 1)
+			kill(message.pid, SIGUSR2);
 	}
 }
 
@@ -142,7 +157,7 @@ static void gidit_daemon_init(char * bootstrap_addr, int bootstrap_port, int loc
 {
 	Key key;
 	ChimeraHost * host = NULL;
-	struct sigaction usr_action;
+	struct sigaction usr_action, usr_action2;
 	sigset_t block_mask;
 
 	//Debug, remove later
@@ -157,49 +172,65 @@ static void gidit_daemon_init(char * bootstrap_addr, int bootstrap_port, int loc
 	logerror("Initializing key %s",key.keystr);
 	//Set up signal handler
 	sigfillset (&block_mask);
-	usr_action.sa_handler = signal_fun;
+	usr_action.sa_handler = signal_one;
 	usr_action.sa_mask = block_mask;
 	usr_action.sa_flags = 0;
 	sigaction(SIGUSR1, &usr_action, NULL);
+	usr_action2.sa_handler = signal_two;
+	usr_action2.sa_mask = block_mask;
+	usr_action2.sa_flags = 0;
+	sigaction(SIGUSR2, &usr_action2, NULL);
 
 	/*    Place upcalls here    */
 	chimera_forward (chimera_state, test_fwd);
 	chimera_deliver (chimera_state, test_del);
 	chimera_update (chimera_state, test_update);
 	chimera_setkey (chimera_state, key);
-	chimera_register (chimera_state, TEST_CHAT, 1);
-	chimera_register (chimera_state, RETURN_CHAT, 1);
+	chimera_register (chimera_state, SEND_PUSH, 1);
+	chimera_register (chimera_state, RETURN_PUSH, 1);
 	chimera_join(chimera_state, host);
 }
 
-
-static int send_service(void)
+static int dht_push(char force, char *project_name, char *pgp_key, char* push_obj)
 {
-	char key[256];
-	int pktlen;
+	unsigned char sha1[20];
 	Key chimera_key;
-	chat_message message;
+	push_message * message;
+	git_SHA_CTX c, d;
+	int name_length = strlen(project_name)+1;
+
 	ChimeraGlobal *chblob = (ChimeraGlobal *) chimera_state->chimera;
 
-	pktlen = packet_read_line(0, key, sizeof(key));
-	if(pktlen==-1)
-		die("error reading key");
-	message.pid = getpid();
-	//memcpy(message,&pid,sizeof(int));
-	pktlen = packet_read_line(0, message.message, sizeof(message.message));
-	if(pktlen==-1)
-		die("error reading message");
-	str_to_key (key, &chimera_key);
-	key_assign(&(message.source),(chblob->me->key));
-	logerror("Sending TEST ((%s)%u:%s) To %s\n",message.message,message.pid,get_key_string(&(message.source)),get_key_string(&chimera_key));
-	chimera_send (chimera_state, chimera_key, TEST_CHAT, sizeof(message), (char*)&message);
-			         
-	while(!return_interrupt){
+	message = (push_message*)malloc(sizeof(push_message)+name_length);
+
+	message->pid = getpid();
+	key_assign(&(message->source),(chblob->me->key));
+	message->name_length = name_length; 
+
+	git_SHA1_Init(&c);
+	git_SHA1_Update(&c, pgp_key, strlen(pgp_key));
+	git_SHA1_Update(&c, project_name, strlen(project_name));
+	git_SHA1_Final(sha1, &c);
+	str_to_key(sha1_to_hex(sha1),&chimera_key);
+
+
+	git_SHA1_Init(&d);
+	git_SHA1_Update(&d, pgp_key, strlen(pgp_key));
+	git_SHA1_Final(sha1, &d);
+	memcpy(message->pgp, sha1, sizeof(message->pgp));
+	message->name_length = strlen(project_name)+1;
+	strncpy(message->name, project_name, message->name_length);
+	
+
+	chimera_send (chimera_state, chimera_key, SEND_PUSH, sizeof(push_message)+name_length, (char*)message);
+
+	while(!push_returned){
 		sleep(1);
 	}
-	logerror("Message Returned");
 
-	return -1;
+	free(message);
+	//logerror("Daemon returned %d",push_returned);
+	return(push_returned-1);
 }
 
 static char *xstrdup_tolower(const char *str)
@@ -252,36 +283,44 @@ static int execute(struct sockaddr *addr)
 
 	alarm(timeout);
 	safe_read(0,&flag,sizeof(char));
-	switch((int)flag){
+	alarm(0);
+	char force_push = 0;
+	char *pgp_key;
+	char *push_obj;
+	struct strbuf project_name = STRBUF_INIT;
+	uint32_t pgp_len;
+	int ret;
+	switch ((int)flag) {
 		case GIDIT_PUSHF_MSG:
-			logerror("Force");
+			force_push = 1;
+			break;
 		case GIDIT_PUSH_MSG:
-			logerror("Push message");
-			char * pgp_key;
-			struct strbuf project_name = STRBUF_INIT;
-			uint32_t pgp_len;
 
 			safe_read(0, &pgp_len, sizeof(uint32_t));
 
 			pgp_len = ntohl(pgp_len);
 			pgp_key = (char*)malloc(pgp_len);
 
-			logerror("Saferead");
-
 			safe_read(0, pgp_key, pgp_len);
-
-			logerror("strbufread");
 
 			strbuf_getline(&project_name, stdin, '\0');
 
-			logerror("Pushing project %s",project_name.buf);
+			logerror("%s",project_name.buf);
 
+			ret = dht_push(force_push, project_name.buf, pgp_key, push_obj);
+
+			if (ret == -1) {
+				logerror("Failed to send dht message");
+			} else if (ret == 0) {
+				logerror("Push object found");
+			} else if (ret == 1) {
+				logerror("No Push object found");
+			}
 			break;
 		default:
 			die("Invalid input flag %d",(int)flag);
-			break;
+			return -1;
 	}
-	alarm(0);
 
 	free(hostname);
 	free(canon_hostname);
@@ -289,8 +328,7 @@ static int execute(struct sockaddr *addr)
 	free(tcp_port);
 	hostname = canon_hostname = ip_address = tcp_port = NULL;
 
-	logerror("Protocol error");
-	return -1;
+	return 0;
 }
 
 static int max_connections = 32;
