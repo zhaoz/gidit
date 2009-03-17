@@ -302,6 +302,15 @@ static void print_pushobj(FILE * fp, struct gidit_pushobj *po)
 	fprintf(fp, "%s", po->signature);
 }
 
+static void strbuf_appendpushobj(struct strbuf * buf, struct gidit_pushobj *po)
+{
+	int ii;
+	strbuf_addf(buf, "%s HEAD\n", po->head);
+	for (ii = 0; ii < po->lines; ii++)
+		strbuf_addf(buf, "%s\n", po->refs[ii]);
+	strbuf_addf(buf, "%s", po->signature);
+}
+
 /**
  * Read in projdir data, create projdir if it doesn't exist
  */
@@ -740,13 +749,51 @@ int gidit_proj_init(FILE *fp, const char * basepath, unsigned int flags)
 	return 0;
 }
 
-int gidit_po_list(FILE *fp, const char * basepath, unsigned int flags)
+char * gidit_po_list(const char * basepath, const char * pgp_sha1, const char * projname)
 {
-	struct gidit_projdir  * pd;
-	char pgp_sha1[41];
-	struct strbuf proj_name = STRBUF_INIT;
-	struct gidit_pushobj po = PO_INIT;
+	char * pobuf = NULL;
 	int rc = 0;
+	struct strbuf po_list = STRBUF_INIT;
+	struct gidit_pushobj po = PO_INIT;
+	struct gidit_projdir  * pd;
+
+	pd = new_projdir(basepath, pgp_sha1, projname);
+	if (!pd)
+		return NULL;
+	
+	// grab pushobjects and dump them out
+	// start with the head pushobj
+	if ((rc = sha_to_pushobj(&po, pd, pd->head)) != 0)
+		return NULL;
+	
+	strbuf_appendpushobj(&po_list, &po);
+
+	while (strncmp(po.prev, END_SHA1, 40) != 0 &&
+			(rc = sha_to_pushobj(&po, pd, po.prev)) == 0)
+		strbuf_appendpushobj(&po_list, &po);
+
+	pobj_release(&po);
+
+	if (rc)
+		return NULL;
+
+	free_projdir(pd);
+
+	pobuf = (char*)malloc(po_list.len + 1);
+	strcpy(pobuf, po_list.buf);
+	pobuf[po_list.len] = '\0';
+
+	fprintf(stderr, "mark\n");
+	strbuf_release(&po_list);
+
+	return pobuf;
+}
+
+int gidit_po_list_stream(FILE *fp, const char * basepath, unsigned int flags)
+{
+	char pgp_sha1[41];
+	char * po_list = NULL;
+	struct strbuf proj_name = STRBUF_INIT;
 
 	if (!read_sha1(fp, pgp_sha1))
 		return error("pgpkey error: bad pushobject format");
@@ -755,30 +802,18 @@ int gidit_po_list(FILE *fp, const char * basepath, unsigned int flags)
 	if (strbuf_getline(&proj_name, fp, '\n') == EOF)
 		return error("No projname: bad pushobject format");
 
-	pd = new_projdir(basepath, pgp_sha1, proj_name.buf);
-	if (!pd)
-		exit(1);
+	po_list = gidit_po_list(basepath, pgp_sha1, proj_name.buf);
 
 	strbuf_release(&proj_name);
 
-	// grab pushobjects and dump them out
-	// start with the head pushobj
-	if ((rc = sha_to_pushobj(&po, pd, pd->head)) != 0)
-		die("Failed pushobjlist generation");
-	
-	print_pushobj(stdout, &po);
+	if (!po_list)
+		die("Could not generate polist");
 
-	while (strncmp(po.prev, END_SHA1, 40) != 0 &&
-			(rc = sha_to_pushobj(&po, pd, po.prev)) == 0)
-		print_pushobj(stdout, &po);
+	printf("%s", po_list);
 
-	if (rc)
-		die("Error during pushobjlist generation");
+	free(po_list);
 
-	pobj_release(&po);
-	free_projdir(pd);
-
-	return rc;
+	return 0;
 }
 
 int gidit_store_bundle(FILE *fp, const char * basepath, unsigned int flags)

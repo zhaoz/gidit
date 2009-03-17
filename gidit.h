@@ -84,9 +84,13 @@ int gidit_proj_init(FILE *fp, const char * basepath, unsigned int flags);
 int gidit_update_pl(FILE *fp, const char * basepath, unsigned int flags);
 
 /**
- * Generate pushobject list
  */
-int gidit_po_list(FILE *fp, const char * basepath, unsigned int flags);
+char * gidit_po_list(const char * basepath, const char * pgp_sha1, const char * projname);
+
+/**
+ * Generate pushobject list, file stream version
+ */
+int gidit_po_list_stream(FILE *fp, const char * basepath, unsigned int flags);
 
 /**
  * save a bundle
