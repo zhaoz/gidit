@@ -126,5 +126,11 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec, unsigned
  */
 int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po);
 
+/**
+ * Function takes projdir, number of pushobjects, and polist
+ *
+ * Updates projdirs polist, and verifies that it has a subset
+ */
+int gidit_update_pushobj_list(struct gidit_projdir * pd, int num_po, struct gidit_pushobj ** polist);
 
 #endif		// GIDIT_H

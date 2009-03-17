@@ -302,13 +302,15 @@ static void print_pushobj(FILE * fp, struct gidit_pushobj *po)
 	fprintf(fp, "%s", po->signature);
 }
 
-static void strbuf_appendpushobj(struct strbuf * buf, struct gidit_pushobj *po)
+static void strbuf_appendpushobj(struct strbuf * buf, struct gidit_pushobj *po, int sig)
 {
 	int ii;
 	strbuf_addf(buf, "%s HEAD\n", po->head);
 	for (ii = 0; ii < po->lines; ii++)
 		strbuf_addf(buf, "%s\n", po->refs[ii]);
-	strbuf_addf(buf, "%s", po->signature);
+
+	if (sig)
+		strbuf_addf(buf, "%s", po->signature);
 }
 
 /**
@@ -492,23 +494,33 @@ static void update_proj_head(struct gidit_projdir * pd, const char * sha1)
 	free(head_path);
 }
 
+static void pushobj_to_sha1(unsigned char * sha1, struct gidit_pushobj *po)
+{
+	struct strbuf buf = STRBUF_INIT;
+	git_SHA_CTX c;
+
+	strbuf_appendpushobj(&buf, po, 0);
+
+	git_SHA1_Init(&c);
+	git_SHA1_Update(&c, buf.buf, buf.len);
+	git_SHA1_Final(sha1, &c);
+
+	strbuf_release(&buf);
+}
+
 /**
- * Given projdir and strbuf containing the pushobject, update with new
+ * Given projdir and pushobj, update with new
  * pushobject and update head file as well as projdir struct.
  * TODO verify pushobj with PGP key
  */
-static int append_pushobj(struct gidit_projdir  * pd, struct strbuf * pobj, 
-							struct strbuf *sig)
+static int pushobj_add_to_list(struct gidit_projdir *pd, struct gidit_pushobj *po)
 {
 	unsigned char sha1[20];
 	char sha1_hex[41];
 	FILE * pobj_fp;
 	char * file_path;
-	git_SHA_CTX c;
 
-	git_SHA1_Init(&c);
-	git_SHA1_Update(&c, pobj->buf, pobj->len);
-	git_SHA1_Final(sha1, &c);
+	pushobj_to_sha1(sha1, po);
 
 	file_path = (char*)malloc(strlen(pd->projdir) + 40 + 1);
 	strcpy(sha1_hex, sha1_to_hex(sha1));
@@ -518,16 +530,15 @@ static int append_pushobj(struct gidit_projdir  * pd, struct strbuf * pobj,
 		return error("Push object alread exists");
 
 	pobj_fp = fopen(file_path, "w");
-	fprintf(pobj_fp, "%s", pobj->buf);
-	fprintf(pobj_fp, "%s", sig->buf);
+	print_pushobj(pobj_fp, po);
 	fprintf(pobj_fp, "%s PREV\n", pd->head);
 	fclose(pobj_fp);
 
 	update_proj_head(pd, sha1_hex);
 	free(file_path);
 	return 0;
-}
 
+}
 
 /**
  * Given sha1, look up pushobj and return it
@@ -621,10 +632,9 @@ int gidit_update_pl(FILE *fp, const char * basepath, unsigned int flags)
 {
 	struct gidit_projdir  * pd;
 	char pgp_sha1[41];
-	int ch = 0, rc = 0;
+	int rc = 0;
 	struct strbuf proj_name = STRBUF_INIT;
-	struct strbuf buf = STRBUF_INIT;
-	struct strbuf pobj = STRBUF_INIT;
+	struct gidit_pushobj po = PO_INIT;
 
 	if (!read_sha1(fp, pgp_sha1))
 		return error("pgpkey error: bad pushobject format");
@@ -635,33 +645,15 @@ int gidit_update_pl(FILE *fp, const char * basepath, unsigned int flags)
 
 	pd = new_projdir(basepath, pgp_sha1, proj_name.buf);
 
-	if (!pd)
+	strbuf_release(&proj_name);
+
+	if (!pd || gidit_read_pushobj(fp, &po))
 		exit(1);
-
-	while (strbuf_getline(&buf, fp, '\n') != EOF) {
-		strbuf_addstr(&buf, "\n");
-		if (strncmp(buf.buf, PGP_SIGNATURE, strlen(PGP_SIGNATURE)) == 0)
-			break;
-		strbuf_addstr(&pobj, buf.buf);
-	}
-
-	if (!buf.len)
-		return error("no pushobject given");
-
-	// rest of the stuff is sig stuff
-	while ((ch = fgetc(fp)) != EOF) {
-		strbuf_grow(&buf, 1);
-		buf.buf[buf.len++] = ch;
-		buf.buf[buf.len] = '\0';
-	}
-
-	if (!(rc = append_pushobj(pd, &pobj, &buf)))
-		return rc;
+	
+	rc = pushobj_add_to_list(pd, &po);
 
 	free_projdir(pd);
-	strbuf_release(&proj_name);
-	strbuf_release(&pobj);
-	strbuf_release(&buf);
+	pushobj_release(&po);
 
 	return rc;
 }
@@ -750,11 +742,11 @@ char * gidit_po_list(const char * basepath, const char * pgp_sha1, const char * 
 	if ((rc = sha1_to_pushobj(&po, pd, pd->head)) != 0)
 		return NULL;
 	
-	strbuf_appendpushobj(&po_list, &po);
+	strbuf_appendpushobj(&po_list, &po, 1);
 
 	while (strncmp(po.prev, END_SHA1, 40) != 0 &&
 			(rc = sha1_to_pushobj(&po, pd, po.prev)) == 0)
-		strbuf_appendpushobj(&po_list, &po);
+		strbuf_appendpushobj(&po_list, &po, 1);
 
 	pushobj_release(&po);
 
@@ -889,6 +881,7 @@ int gidit_get_bundle(FILE *fp, FILE *out, const char *basepath, unsigned int fla
 
 /**
  * Given a fd, read stuff into pushobj
+ * returns 0 on success
  */
 int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po)
 {
@@ -955,7 +948,7 @@ int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po)
 	strbuf_release(&sig);
 	string_list_clear(&list, 0);
 
-	return 1;
+	return 0;
 }
 
 int gidit_verify_pushobj(FILE *fp, unsigned int flags)
@@ -1155,3 +1148,54 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
 	return 0;
 }
 
+/**
+ * Update a pushobject list, and verify that our list is a subset of given polist
+ */
+int gidit_update_pushobj_list(struct gidit_projdir * pd, int num_po, struct gidit_pushobj ** polist)
+{
+	char found = 0;
+	int rc = 0;
+	int ii;
+	struct gidit_pushobj tmp;
+
+	if (!sha1_to_pushobj(&tmp, pd, pd->head))
+		return 1;
+
+	// loop through the polists given and see if they exist
+	for (ii = 0; ii < num_po; ++ii) {
+		struct gidit_pushobj *po = polist[ii];
+
+		// compare po to tmp and see if they match
+		if (strcmp(tmp.head, po->head) == 0) {
+			if (!found)
+				found = ii;
+
+			// increment to next known pushobject
+			rc = sha1_to_pushobj(&tmp, pd, tmp.prev);
+
+			if (ii + 1 != num_po && !rc) {
+				// if we aren't on the last polist, and there are no more to walk through, we failed
+				pushobj_release(&tmp);
+				return 1;
+			}
+		} else if (found) {
+			// we've found a common pushobj, but no longer match, which means diverged chain
+			return error("pushobj chain diverged");
+		}
+	}
+
+	pushobj_release(&tmp);
+
+	if (!found)		// didn't find a similar head something is wrong
+		return error("No fastforward found from known latest pushobj");
+	
+	// we have last known, start updating
+	for (ii = found - 1; ii != 0; --ii) {
+		struct gidit_pushobj *po = polist[ii];
+
+		if (pushobj_add_to_list(pd, po) != 0)
+			return 1;
+	}
+
+	return 0;
+}
