@@ -136,16 +136,15 @@ static void test_fwd (Key ** kp, Message ** mp, ChimeraHost ** hp)
 static void test_del (Key * k, Message * m)
 {
 	if (m->type == SEND_PUSH) {
-		push_message message;
+		push_message * message = (push_message *) m->payload;
 		return_message rmessage;
-		message = *((push_message *)m->payload);
 
-		logerror("Received message:\n\tPID:%d\n\tPROJ:\n\t%s",message.pid,message.name);
+		logerror("Received message:\n\tPID:%d\n\tPROJ:%s",message->pid,message->name);
 
-		rmessage.pid = message.pid;
+		rmessage.pid = message->pid;
 		rmessage.return_val = 0;
 
-		chimera_send(chimera_state, message.source, RETURN_PUSH, sizeof(rmessage), (char*)&rmessage);
+		chimera_send(chimera_state, message->source, RETURN_PUSH, sizeof(rmessage), (char*)&rmessage);
 	} else if (m->type == RETURN_PUSH) {
 		return_message message;
 		message = *((return_message *)m->payload);
@@ -235,10 +234,8 @@ static int dht_push(char force, char *project_name, char *pgp_key, char* push_ob
 	git_SHA1_Update(&d, pgp_key, strlen(pgp_key));
 	git_SHA1_Final(sha1, &d);
 	memcpy(message->pgp, sha1, sizeof(message->pgp));
-	message->name_length = strlen(project_name)+1;
 	strncpy(message->name, project_name, message->name_length);
 	
-
 	chimera_send (chimera_state, chimera_key, SEND_PUSH, sizeof(push_message)+name_length, (char*)message);
 
 	while(!push_returned){
@@ -321,8 +318,6 @@ static int execute(struct sockaddr *addr)
 			safe_read(0, pgp_key, pgp_len);
 
 			strbuf_getline(&project_name, stdin, '\0');
-
-			logerror("%s",project_name.buf);
 
 			ret = dht_push(force_push, project_name.buf, pgp_key, push_obj);
 
