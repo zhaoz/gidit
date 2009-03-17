@@ -134,7 +134,7 @@ test_expect_success 'verify pushobject should work' '
 	cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD` | git gidit --verify-pobj
 '
 
-test_expect_code 128 'verify pushobject with bad ref should fail' '
+test_expect_code 1 'verify pushobject with bad ref should fail' '
 	(echo "000000000AB1F000000000000000000000000000 fake" && cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD`) | git gidit --verify-pobj 
 '
 

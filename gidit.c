@@ -578,6 +578,10 @@ static int sha1_to_pushobj(struct gidit_pushobj *po, const struct gidit_projdir 
 	return 0;
 }
 
+/**
+ * Look at given pushobj, and check to see if all references are known
+ * returns 0 if all known, 1 if there are unknown
+ */
 static int verify_pushobj(struct gidit_pushobj *po)
 {
 	int ii;
@@ -592,12 +596,12 @@ static int verify_pushobj(struct gidit_pushobj *po)
 	// for each ref, verify its existence
 	cm = lookup_commit_reference_gently(sha1, 1);
 	if (!cm)
-		die("Failed verification");
+		return 1;
 	
 	for (ii = 0; ii < po->lines; ++ii) {
 		get_sha1_hex(po->refs[ii], sha1);
 		if (!lookup_commit_reference_gently(sha1, 1))
-			die("Failed verification");
+			return 1;
 	}
 
 	return 0;
