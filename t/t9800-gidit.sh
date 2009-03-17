@@ -68,6 +68,11 @@ test_expect_success 'User projdir init should work' '
 	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME 
 '
 
+test_expect_success 'pgp key should be the same' '
+	gpg --export > pgp_export_raw &&
+	cmp pgp_export_raw $GIDIT_DIR/pushobjects/$PGP_SHA1/PGP
+'
+
 test_expect_success 'second projdir init should work' '
 	(echo test2 && gpg --export) | git gidit --proj-init -b $GIDIT_DIR &&
 	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/PGP  && 
