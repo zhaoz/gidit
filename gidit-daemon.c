@@ -170,7 +170,7 @@ static void dht_del (Key * k, Message * m)
 		if(message->return_val == 0)
 			//Tell the handler that there is push_obj, go home
 			kill(message->pid, SIGUSR1);
-		if(message->return_val == 1)
+		if (message->return_val == 1) {
 			//Parse the payload
 			char * proj_name = message->buf;
 			int proj_name_len = strlen(message->buf) + 1;
@@ -189,14 +189,15 @@ static void dht_del (Key * k, Message * m)
 			//
 			//}
 			//Save the push_obj in the appropriate place
-			if(gidit_update_pushobj_list(struct gidit_projdir * pd, int num_po, struct gidit_pushobj ** polist)){
+			if (gidit_update_pushobj_list(proj_dir, num_po, polist)) {
 				//Failure
 				logerror("gidit_update_pushobj_list failed");
 				kill(message->pid, SIGUSR1);
-			}else{
+			} else {
 				//Tell the handler I'm done.
 				kill(message->pid, SIGUSR2);
 			}
+		}
 	}
 }
 
