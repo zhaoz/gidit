@@ -14,6 +14,7 @@
 #define NI_MAXSERV 32
 #endif
 
+#define DEFAULT_BASE_PATH "/tmp/gidit/"
 
 static int log_syslog;
 static int verbose;
@@ -43,6 +44,22 @@ static char *hostname;
 static char *canon_hostname;
 static char *ip_address;
 static char *tcp_port;
+
+static int safe_create_dir(const char *dir)
+{
+	int rc = 0;
+	if (mkdir(dir, 0777) < 0) {
+		if (errno != EEXIST) {
+			perror(dir);
+			rc = error("Error while making directory: %s", dir);
+		} else if (access(dir, W_OK)) {
+			rc = error("Unable to write to directory: %s", dir);
+		}
+	}
+
+	return rc;
+}
+
 
 static void logreport(int priority, const char *err, va_list params)
 {
@@ -780,9 +797,14 @@ int main(int argc, char **argv)
 	if (listen_port == 0)
 		listen_port = DEFAULT_GIT_PORT;
 
-	if (base_path && !is_directory(base_path))
-		die("base-path '%s' does not exist or is not a directory",
-		    base_path);
+	if (!base_path){
+		base_path = DEFAULT_BASE_PATH;
+	}
+
+	if(!is_directory(base_path)){
+		if (safe_create_dir(base_path))
+			die("Error creating dir '%s'",base_path);
+	}
 
 	if (chimera_port == 0)
 		chimera_port = DEFAULT_CHIMERA_PORT;
