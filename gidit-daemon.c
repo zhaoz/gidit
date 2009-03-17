@@ -148,40 +148,42 @@ static void dht_del (Key * k, Message * m)
 		logerror("Received message:\n\tPID:%d\n\tPROJ:%s",ntohl(message->pid),proj_name);
 
 		if(message->force){
-			
+			if(gidit_proj_init(base_path, ntohl(message->pgp_len), pgp, proj_name, 0))
+				die("Error initializing project");
 		}
-			//Create the directory
-			git_SHA1_Init(&c);
-			git_SHA1_Update(&c, pgp_key, pgp_key_len);
-			git_SHA1_Final(sha1, &c);
+
+		git_SHA1_Init(&c);
+		git_SHA1_Update(&c, pgp, ntohl(message->pgp_len));
+		git_SHA1_Final(sha1, &c);
 
 		//Find pobj list given message->pgp and message->name
 		//If its not there, set the return_val to 0
-		push_obj = gidit_po_list(base_path, sha1_to_hex(message->pgp), message->name);
+		push_obj = gidit_po_list(base_path, sha1_to_hex(sha1), proj_name);
 
 		if (!push_obj) {
 			rmessage = (return_message*) malloc (sizeof(return_message));
-			rmessage->return_val = 1;
+			rmessage->return_val = htonl(1);
 		} else {
 			return_size = strlen(push_obj) + 1;
-			rmessage = (return_message*) malloc (sizeof(return_message) + return_size + message->name_length);
-			rmessage->return_val = 0;
-			rmessage->buf_len = return_size + message->name_length;
-			memcpy(rmessage->pgp, message->pgp, sizeof(rmessage->pgp));
-			memcpy(rmessage->buf, message->name, message->name_length);
-			memcpy(rmessage->buf + message->name_length, push_obj, return_size);
+			rmessage = (return_message*) malloc (sizeof(return_message) + return_size + message->name_len);
+			rmessage->return_val = htonl(0);
+			rmessage->buf_len = htonl(return_size + ntohl(message->name_len));
+			memcpy(rmessage->pgp, sha1, sizeof(rmessage->pgp));
+			memcpy(rmessage->buf, proj_name, ntohl(message->name_len));
+			memcpy(rmessage->buf + ntohl(message->name_len), push_obj, return_size);
+			return_size += ntohl(message->name_len);
 			free(push_obj);
 		}
-		rmessage->pid = message->pid;
+		rmessage->pid = message->pid; //Might as well stay in network-order
 
 		chimera_send(chimera_state, message->source, RETURN_PUSH, sizeof(return_message)+return_size, (char*)rmessage);
 	} else if (m->type == RETURN_PUSH) {
 		return_message * message;
 		message = (return_message *)m->payload;
 
-		if (message->return_val == 1)	//Tell the handler that there is no push_obj, go home
-			kill(message->pid, SIGUSR2);
-		if (message->return_val == 0) {
+		if (ntohl(message->return_val) == 1)	//Tell the handler that there is no push_obj, go home
+			kill(ntohl(message->pid), SIGUSR2);
+		if (ntohl(message->return_val) == 0) {
 			//Parse the payload
 			char * proj_name = message->buf;
 			int proj_name_len = strlen(message->buf) + 1;
@@ -197,10 +199,10 @@ static void dht_del (Key * k, Message * m)
 			if (gidit_update_pushobj_list(proj_dir, num_po, polist)) {
 				//Failure
 				logerror("gidit_update_pushobj_list failed");
-				kill(message->pid, SIGUSR2);
+				kill(ntohl(message->pid), SIGUSR2);
 			} else {
 				//Tell the handler I'm done.
-				kill(message->pid, SIGUSR1);
+				kill(ntohl(message->pid), SIGUSR1);
 			}
 		}
 	}
@@ -273,7 +275,7 @@ static int dht_push(char force, char *project_name, uint32_t pgp_key_len, char *
 	message->pid = htonl(getpid());
 	key_assign(&(message->source),(chblob->me->key));
 	message->name_len = htonl(name_length);
-	message->pgp_len = htnol(pgp_key_len);
+	message->pgp_len = htonl(pgp_key_len);
 
 	git_SHA1_Init(&c);
 	git_SHA1_Update(&c, pgp_key, pgp_key_len);
@@ -284,13 +286,15 @@ static int dht_push(char force, char *project_name, uint32_t pgp_key_len, char *
 	memcpy(message->buf, project_name, name_length);
 	memcpy(message->buf + name_length, pgp_key, pgp_key_len);
 
+	logerror("Return key %s",message->source.keystr);
+
 	chimera_send (chimera_state, chimera_key, SEND_PUSH, sizeof(push_message) + name_length + pgp_key_len, (char*)message);
 
 	while (!push_returned)
 		sleep(1);
 	
 	if (push_returned == 1)
-		*push_obj = gidit_po_list(base_path, sha1_to_hex(message->pgp), message->name);
+		*push_obj = gidit_po_list(base_path, sha1_to_hex(sha1), project_name);
 
 	free(message);
 	return(push_returned-1);
@@ -367,7 +371,7 @@ static int execute(struct sockaddr *addr)
 			safe_read(0, pgp_key, pgp_len);
 
 			strbuf_getline(&project_name, stdin, '\0');
-			ret = dht_push(force_push, project_name.buf, pgp_key_len, pgp_key, &push_obj);
+			ret = dht_push(force_push, project_name.buf, pgp_len, pgp_key, &push_obj);
 
 			if (ret == -1) {
 				logerror("Failed to send dht message");
