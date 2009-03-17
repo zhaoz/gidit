@@ -436,7 +436,7 @@ static int gen_pushobj(struct gidit_pushobj * po, const char *signingkey,
 /**
  * Fill out projdir hash
  */
-static struct gidit_projdir * new_projdir(const char * basepath, const char * sha1_hex, 
+struct gidit_projdir * new_projdir(const char * basepath, const char * sha1_hex, 
 		const char * projname)
 {
 	ssize_t bd_size;
@@ -476,7 +476,7 @@ static struct gidit_projdir * new_projdir(const char * basepath, const char * sh
 /**
  * Update the project head file, and the projdir struct's head
  */
-static void update_proj_head(struct gidit_projdir  * pd, const char * sha1)
+static void update_proj_head(struct gidit_projdir * pd, const char * sha1)
 {
 	FILE * head_fp;
 	char * head_path = NULL;

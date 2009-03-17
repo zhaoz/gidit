@@ -61,6 +61,8 @@ struct gidit_pushobj {
 
 #define PO_INIT { 0, NULL, NULL, "\0" }
 
+struct gidit_projdir * new_projdir(const char * basepath, const char * sha1_hex, const char * projname);
+
 /**
  * Generate a pushobj, which is a list of all refs including HEAD, and
  * excluding stashes and remotes
@@ -107,6 +109,7 @@ int gidit_get_bundle(FILE *fp,  FILE * out, const char * basepath, unsigned int 
  */
 int gidit_verify_pushobj(FILE *fp, unsigned int flags);
 
+
 /**
  * Generate a bundle read from stdin
  */
@@ -121,5 +124,6 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec, unsigned
  * Function for reading pushobjects
  */
 int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po);
+
 
 #endif		// GIDIT_H
