@@ -43,7 +43,7 @@ export PID_FILE=/tmp/gidit_daemon.pid
 export PGP_LEN=`printf "%04x" \`gpg --export | wc -c\``
 export PGP_SHA1=`gpg --export | sha1sum | head -c 40`
 
-test_expect_failure 'start daemon should succeed' '
+test_expect_success 'start daemon should succeed' '
 	git gidit-daemon --pid-file=$PID_FILE --base-path=$GIDIT_DIR &
 	sleep 1 && 
 	test -e $PID_FILE && 

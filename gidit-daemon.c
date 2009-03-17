@@ -846,7 +846,7 @@ int main(int argc, char **argv)
 	if (listen_port == 0)
 		listen_port = DEFAULT_GIT_PORT;
 
-	if (!base_path){
+	if (!base_path) {
 		base_path = DEFAULT_BASE_PATH;
 	}
 
@@ -872,6 +872,9 @@ int main(int argc, char **argv)
 		shaBuf[40] = '\0';
 		key = shaBuf;
 	}
+
+	gidit_init(base_path);
+
 	gidit_daemon_init(bootstrap_addr, bootstrap_port, chimera_port, key);
 	
 	sanitize_stdfds();
