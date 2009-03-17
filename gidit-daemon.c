@@ -137,14 +137,30 @@ static void test_del (Key * k, Message * m)
 {
 	if (m->type == SEND_PUSH) {
 		push_message * message = (push_message *) m->payload;
-		return_message rmessage;
+		return_message * rmessage;
+		char *push_obj = NULL;
+		int return_size = 0;
 
 		logerror("Received message:\n\tPID:%d\n\tPROJ:%s",message->pid,message->name);
 
-		rmessage.pid = message->pid;
-		rmessage.return_val = 0;
+		//Find pobj list given message->pgp and message->name
+		//If its not there, set the return_val to 0
+		push_obj = gidit_po_list(base_path, sha1_to_hex(message->pgp), message->name);
 
-		chimera_send(chimera_state, message->source, RETURN_PUSH, sizeof(rmessage), (char*)&rmessage);
+		if(!push_obj){
+			rmessage = (return_message*) malloc (sizeof(return_message));
+			rmessage->return_val = 0;
+		}
+		else{
+			return_size = strlen(push_obj) + 1;
+			rmessage = (return_message*) malloc (sizeof(return_message)+return_size);
+			rmessage->return_val = 1;
+			rmessage->buf_len = return_size;
+			strncpy(rmessage->buf,push_obj,return_size);
+			free(push_obj);
+		}
+
+		chimera_send(chimera_state, message->source, RETURN_PUSH, sizeof(return_message)+return_size, (char*)rmessage);
 	} else if (m->type == RETURN_PUSH) {
 		return_message message;
 		message = *((return_message *)m->payload);
@@ -243,7 +259,6 @@ static int dht_push(char force, char *project_name, char *pgp_key, char* push_ob
 	}
 
 	free(message);
-	//logerror("Daemon returned %d",push_returned);
 	return(push_returned-1);
 }
 
@@ -299,8 +314,8 @@ static int execute(struct sockaddr *addr)
 	safe_read(0,&flag,sizeof(char));
 	alarm(0);
 	char force_push = 0;
-	char *pgp_key;
-	char *push_obj;
+	char *pgp_key = NULL;
+	char *push_obj = NULL;
 	struct strbuf project_name = STRBUF_INIT;
 	uint32_t pgp_len;
 	int ret;
