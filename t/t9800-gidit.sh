@@ -55,6 +55,7 @@ cp -R "$TEST_DIRECTORY"/t7004 ./gpghome
 chmod 0700 gpghome
 GNUPGHOME="$(pwd)/gpghome"
 export GNUPGHOME
+
 test_expect_success 'signed pushobject generation should work' '
 	git gidit --pushobj -u committer | grep "BEGIN PGP SIGNATURE"
 '
@@ -80,10 +81,14 @@ test_expect_success 'second projdir init should work' '
 '
 
 test_expect_success 'PushObject update should work' '
-	(echo -n $PGP_SHA1 && echo $PROJ_NAME && cat $TEST_DIRECTORY/t9800/pushobj) | git gidit --updatepl -b $GIDIT_DIR &&
+	(echo "$PGP_SHA1$PROJ_NAME" && git gidit --pushobj -s) | git gidit --updatepl -b $GIDIT_DIR &&
 	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD &&
 	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD`
 '
+
+echo "stuff2" > tmp
+git add tmp
+git commit -q -m "added tmp"
 
 test_expect_success 'PushObject update should fail on no pushobj' '
 	(echo -n $PGP_SHA1 && echo -n $PROJ_NAME) | git gidit --updatepl -b $GIDIT_DIR;
@@ -157,6 +162,10 @@ test_expect_success 'bundle gen from pushobjects should succeed' '
 	(cat pobj2) | git gidit --create-bundle > bdn1 &&
 	git bundle create bdn2 --branches `cat pobj2 | grep HEAD | head -c 40`..`git log -n1 HEAD --pretty=oneline | head -c 40` &&
 	cmp bdn1 bdn2
+'
+
+test_expect_success 'verify pushobj list should succeed' '
+	(echo -n "$PGP_SHA1$PROJ_NAME") | git gidit --polist -b $GIDIT_DIR | git gidit --verify-polist 
 '
 
 # clean up

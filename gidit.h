@@ -62,7 +62,7 @@ struct gidit_pushobj {
 	char prev[41];
 };
 
-#define PO_INIT { 0, NULL, NULL, "\0" }
+#define PO_INIT { 0, NULL, NULL, "\0", "\0" }
 
 struct gidit_projdir * new_projdir(const char * basepath, const char * sha1_hex, const char * projname);
 
@@ -102,6 +102,7 @@ int gidit_update_pl(FILE *fp, const char * basepath, unsigned int flags);
 int pushobj_add_to_list(struct gidit_projdir *pd, struct gidit_pushobj *po);
 
 /**
+ * returns character buffer holding the po list, NULL if fails
  */
 char * gidit_po_list(const char * basepath, const char * pgp_sha1, const char * projname);
 
@@ -139,7 +140,7 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec, unsigned
 /**
  * Function for reading pushobjects
  */
-int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po);
+int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po, int read_prev);
 
 /**
  * Function takes projdir, number of pushobjects, and polist
@@ -149,7 +150,13 @@ int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po);
 int gidit_update_pushobj_list(struct gidit_projdir * pd, int num_po, struct gidit_pushobj ** polist);
 
 /**
+ * Given a push object list in stdin, verify that all refs are known
+ */
+int gidit_verify_pushobj_list(FILE * fp);
+
+/**
  * Given a buffer containing a pushobj, construct po, and return pointer in buf after pushobj
+ * returns NULL on failure
  */
 const char * str_to_pushobj(const char *buf, struct gidit_pushobj * po);
 

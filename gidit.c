@@ -562,7 +562,10 @@ static int sha1_to_pushobj(struct gidit_pushobj *po, const struct gidit_projdir 
 	if (!fp)
 		return error("Could not open pushobj");
 	
-	gidit_read_pushobj(fp, po);
+	if (gidit_read_pushobj(fp, po, 1)) {
+		fclose(fp);
+		return 1;
+	}
 
 	if (!po->prev)
 		return error("No previous pointer in pushobject");
@@ -653,7 +656,7 @@ int gidit_update_pl(FILE *fp, const char * basepath, unsigned int flags)
 
 	strbuf_release(&proj_name);
 
-	if (!pd || gidit_read_pushobj(fp, &po))
+	if (!pd || gidit_read_pushobj(fp, &po, 1))
 		exit(1);
 	
 	rc = pushobj_add_to_list(pd, &po);
@@ -913,7 +916,7 @@ int gidit_get_bundle(FILE *fp, FILE *out, const char *basepath, unsigned int fla
  * Given a fd, read stuff into pushobj
  * returns 0 on success
  */
-int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po)
+int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po, int read_prev)
 {
 	int ii;
 	int head = 0;
@@ -934,25 +937,27 @@ int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po)
 		// check to see if this is the HEAD ref
 		if (strncmp(buf.buf + 41, "HEAD", 4) == 0) {
 			strncpy(po->head, buf.buf, 40);
+			po->head[40] = '\0';
+
 			head = 1;
 			continue;
 		}
 
-		cbuf = (char*)xmalloc(buf.len);
-		strcpy(cbuf, buf.buf);
+		cbuf = xmemdupz(buf.buf, buf.len);
 		string_list_append(cbuf, &list);
 	}
 
-	if (!head)
-		die("pushobject did not contain HEAD ref");
-	
-	po->lines = list.nr;
-	po->refs = (char**)xmalloc(sizeof(char*) * list.nr);
+	if (!list.nr)
+		return error("Pushobject contained no refs");
 
-	for (ii = 0; ii < list.nr; ii++) {
-		po->refs[ii] = (char*)xmalloc(strlen(list.items[ii].string) + 1);
-		strcpy(po->refs[ii], list.items[ii].string);
-	}
+	if (!head)
+		return error("pushobject did not contain HEAD ref");
+
+	po->lines = list.nr;
+	po->refs = (char**)xcalloc(list.nr, sizeof(char*));
+
+	for (ii = 0; ii < list.nr; ii++)
+		po->refs[ii] = xmemdupz(list.items[ii].string, strlen(list.items[ii].string));
 
 	// rest of the stuff is signature
 	strbuf_add(&sig, buf.buf, buf.len);
@@ -963,15 +968,15 @@ int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po)
 		if (strncmp(buf.buf, END_PGP_SIGNATURE, strlen(END_PGP_SIGNATURE)) == 0)
 			break;
 	}
-	po->signature = (char*)xmalloc(sig.len);
-	strcpy(po->signature, sig.buf);
 
-	memset(po->prev, 0, 40);
-	
+	po->signature = xmemdupz(sig.buf, sig.len);
+
 	// now the rest of the stuff is the prev pointer
-	if (strbuf_getline(&buf, fp, '\n') != EOF) {
+	if (read_prev && strbuf_getline(&buf, fp, '\n') != EOF) {
 		strncpy(po->prev, buf.buf, 40);
 		po->prev[40] = '\0';
+	} else {
+		memset(po->prev, 0, 40);
 	}
 
 	strbuf_release(&buf);
@@ -986,9 +991,7 @@ int gidit_verify_pushobj(FILE *fp, unsigned int flags)
 	int rc = 0;
 	struct gidit_pushobj po = PO_INIT;
 
-	gidit_read_pushobj(fp, &po);
-
-	rc = verify_pushobj(&po);
+	rc = gidit_read_pushobj(fp, &po, 0) || verify_pushobj(&po);
 
 	pushobj_release(&po);
 
@@ -1002,7 +1005,8 @@ int gidit_gen_bundle(FILE *fp, unsigned int flags)
 	struct strbuf bun = STRBUF_INIT;
 	const char *head;
 	
-	gidit_read_pushobj(fp, &po);
+	if (gidit_read_pushobj(fp, &po, 1))
+		die("Could not read pushobj");
 
 	if (verify_pushobj(&po))
 		die("Failed verification");
@@ -1147,7 +1151,8 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
 	fd = fdopen(sock, "r");
 
 	if (!force) {
-		gidit_read_pushobj(fd, &po);
+		if (gidit_read_pushobj(fd, &po, 1))
+			die("Could not read pushobj");
 
 		// verify the given pushobject
 		if (verify_pushobj(&po) != 0)
@@ -1232,6 +1237,68 @@ int gidit_update_pushobj_list(struct gidit_projdir * pd, int num_po, struct gidi
 	}
 
 	return 0;
+}
+
+/**
+ * Look through a pushobject list, and verify that all refs are known
+ * @returns 0 if all known, 1 if there are unknown
+ */
+static int verify_pushobj_list(int num_po, struct gidit_pushobj ** polist)
+{
+	int ii;
+
+	for (ii = 0; ii < num_po; ++ii)
+		if (verify_pushobj(polist[ii]))
+			return 1;
+
+	return 0;
+}
+
+static struct gidit_pushobj * pushobj_init()
+{
+	struct gidit_pushobj * po = xmalloc(sizeof(struct gidit_pushobj));
+	po->lines = 0;
+	po->refs = NULL;
+	po->signature = NULL;
+
+	return po;
+}
+
+int gidit_verify_pushobj_list(FILE * fp)
+{
+	int nr = 0;
+	int rc = 0;
+	int size = 4;
+	struct gidit_pushobj ** polist = xcalloc(size, sizeof(struct gidit_pushobj*));
+	struct gidit_pushobj * po = pushobj_init();
+
+	while (!gidit_read_pushobj(fp, po, 0)) {
+		if (nr == size) {
+			size += 4;
+			polist = xrealloc(polist, sizeof(struct gidit_pushobj*) * size);
+		}
+		polist[nr] = po;
+
+		po = pushobj_init();
+
+		nr++;
+	}
+
+	pushobj_release(po);
+	free(po);
+
+	polist = xrealloc(polist, sizeof(struct gidit_pushobj*) * nr);
+
+	rc = verify_pushobj_list(nr, polist);
+
+	// cleanup
+	for (nr--; nr >= 0; nr--) {
+		pushobj_release(polist[nr]);
+		free(polist[nr]);
+	}
+	free(polist);
+
+	return rc;
 }
 
 const char * str_to_pushobj(const char *buf, struct gidit_pushobj * po)
@@ -1329,7 +1396,6 @@ int str_to_polist(const char * buf, struct gidit_pushobj ***polist)
 
 		nr++;
 	}
-
 
 	return nr;
 }
