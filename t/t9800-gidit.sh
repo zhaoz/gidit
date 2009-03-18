@@ -179,6 +179,10 @@ test_expect_success 'get missing bundles should work' '
 			git gidit --list-missing | grep $POBJ_SHA1 | wc -l` -eq 1
 '
 
+test_expect_success 'test temp' '
+	cat $TEST_DIRECTORY/t9800/pushobj | git gidit --test 2> ../log
+'
+
 # clean up
 rm -rf $GIDIT_DIR
 

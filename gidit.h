@@ -189,4 +189,6 @@ int str_to_polist(const char * buf, struct gidit_pushobj ***polist);
  */
 void pushobj_to_sha1(unsigned char * sha1, struct gidit_pushobj *po);
 
+int gidit_test(FILE *fp);
+
 #endif		// GIDIT_H

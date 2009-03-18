@@ -1393,15 +1393,16 @@ const char * str_to_pushobj(const char *buf, struct gidit_pushobj * po)
 		// check to see if it is the HEAD ref
 		if (strncmp(buf + 41, "HEAD", 4) == 0) {
 			strncpy(po->head, buf, 40);
+			po->head[40] = '\0';
 			head = 1;
+			buf = pt + 1;
 			continue;
 		}
 
 		size = pt - buf;
-		cbuf = (char*)xmalloc(size + 1);
-		strncpy(cbuf, buf, size);
-		cbuf[size] = '\0';
+		cbuf = xmemdupz(buf, size);
 		string_list_append(cbuf, &list);
+		buf = pt + 1;
 	}
 
 	if (!head || !list.nr) {
@@ -1415,10 +1416,8 @@ const char * str_to_pushobj(const char *buf, struct gidit_pushobj * po)
 	po->refs = (char**)xmalloc(sizeof(char*) * list.nr);
 
 	// copy string list over to the pushobject
-	for (ii = 0; ii < list.nr; ii++) {
-		po->refs[ii] = (char*)xmalloc(strlen(list.items[ii].string) + 1);
-		strcpy(po->refs[ii], list.items[ii].string);
-	}
+	for (ii = 0; ii < list.nr; ii++)
+		po->refs[ii] = xstrdup(list.items[ii].string);
 
 	// rest of the stuff is signature
 	// handle sig stuff buf-> pt should hold first line of sig right now
@@ -1427,6 +1426,7 @@ const char * str_to_pushobj(const char *buf, struct gidit_pushobj * po)
 		strbuf_addstr(&sig, "\n");
 		if (strncmp(buf, END_PGP_SIGNATURE, strlen(END_PGP_SIGNATURE)) == 0)
 			break;
+		buf = pt + 1;
 	} while ((pt = strchr(buf, '\n')) != NULL);
 
 	po->signature = (char*)xmalloc(sig.len);
@@ -1469,5 +1469,20 @@ int str_to_polist(const char * buf, struct gidit_pushobj ***polist)
 	}
 
 	return nr;
+}
+
+int gidit_test(FILE *fp)
+{
+	struct strbuf buf = STRBUF_INIT;
+	struct gidit_pushobj po = PO_INIT;
+
+	strbuf_read(&buf, fileno(fp), 1024);
+
+	str_to_pushobj(buf.buf, &po);
+
+	pushobj_release(&po);
+	strbuf_release(&buf);
+
+	return 0;
 }
 
