@@ -92,6 +92,11 @@ int gidit_proj_init_stream(FILE *fp, const char * basepath, unsigned int flags);
 int gidit_update_pl(FILE *fp, const char * basepath, unsigned int flags);
 
 /**
+ * Update projdirs polist with given pushobj
+ */
+int pushobj_add_to_list(struct gidit_projdir *pd, struct gidit_pushobj *po);
+
+/**
  */
 char * gidit_po_list(const char * basepath, const char * pgp_sha1, const char * projname);
 

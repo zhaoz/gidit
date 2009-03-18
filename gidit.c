@@ -515,7 +515,7 @@ static void pushobj_to_sha1(unsigned char * sha1, struct gidit_pushobj *po)
  * pushobject and update head file as well as projdir struct.
  * TODO verify pushobj with PGP key
  */
-static int pushobj_add_to_list(struct gidit_projdir *pd, struct gidit_pushobj *po)
+int pushobj_add_to_list(struct gidit_projdir *pd, struct gidit_pushobj *po)
 {
 	unsigned char sha1[20];
 	char sha1_hex[41];
@@ -1117,7 +1117,7 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
 
 	strbuf_release(&msg);
 
-	if (read_ack(sock) != 0)
+	if (read_ack(sock))
 		die("Push failed early");
 	
 	// now receive the pushobject
