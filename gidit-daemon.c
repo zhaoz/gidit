@@ -176,11 +176,12 @@ static void deliver_get_po_list(Key *k, Message *m)
 	char * proj_name = message->buf;
 	unsigned char * pgp = (unsigned char*)(message->buf + ntohl(message->name_len));
 	return_message * rmessage;
-	char *push_obj = NULL;
+	char *po_list_buf = NULL;
 	int return_size = 0;
 	git_SHA_CTX c;
 
-	logerror("RECEIVED %s:\n\tPID:%d\n\tPROJ:%s", message->force ? "PUSHF" : "PUSH", ntohl(message->pid),proj_name);
+	logerror("deliver_get_po_list, RECEIVED %s:\n\tPID:%d\n\tPROJ:%s", 
+				message->force ? "PUSHF" : "PUSH", ntohl(message->pid),proj_name);
 
 	if (message->force) {
 		if(gidit_proj_init(base_path, ntohl(message->pgp_len), pgp, proj_name, 0))
@@ -193,25 +194,28 @@ static void deliver_get_po_list(Key *k, Message *m)
 
 	//Find pobj list given message->pgp and message->name
 	//If its not there, set the return_val to 0
-	push_obj = gidit_po_list(base_path, sha1_to_hex(sha1), proj_name);
+	po_list_buf = gidit_po_list(base_path, sha1_to_hex(sha1), proj_name);
 
-	if (!push_obj) {
+	if (!po_list_buf) {
 		logerror("Failed to find PO");
 		rmessage = (return_message*) malloc (sizeof(return_message));
 		rmessage->return_val = htonl(1);
 	} else {
-		return_size = strlen(push_obj) + 1;
+		return_size = strlen(po_list_buf) + 1;
 		rmessage = (return_message*) malloc (sizeof(return_message) + return_size + message->name_len);
 		rmessage->return_val = htonl(0);
 		rmessage->buf_len = htonl(return_size + ntohl(message->name_len));
-		memcpy(rmessage->pgp, sha1, sizeof(rmessage->pgp));
-		memcpy(rmessage->buf, proj_name, ntohl(message->name_len));
-		memcpy(rmessage->buf + ntohl(message->name_len), push_obj, return_size);
+		memcpy(rmessage->pgp, sha1, 20);
+		int projname_len = ntohl(message->name_len);
+		memcpy(rmessage->buf, proj_name, projname_len);
+		memcpy(rmessage->buf + projname_len, po_list_buf, return_size);
 		return_size += ntohl(message->name_len);
-		free(push_obj);
+		free(po_list_buf);
 	}
 	rmessage->force = message->force;
 	rmessage->pid = message->pid; //Might as well stay in network-order
+
+	fprintf(stderr, "about to call RETURN_PO_LIST\n");
 
 	chimera_send(chimera_state, message->source, RETURN_PO_LIST, sizeof(return_message)+return_size, (char*)rmessage);
 }
@@ -224,6 +228,7 @@ static void deliver_return_po_list(Key *k, Message *m)
 	logerror("RECEIVED RETURN VAL%d",ntohl(message->return_val));
 
 	if (ntohl(message->return_val)){//Tell the handler that there is no push_obj, go home
+		fprintf(stderr, "bad return val, no pushobj\n");
 		kill(ntohl(message->pid), SIGUSR2);
 		return;
 	}
@@ -231,24 +236,31 @@ static void deliver_return_po_list(Key *k, Message *m)
 	//Parse the payload
 	char * proj_name = message->buf;
 	int proj_name_len = strlen(message->buf) + 1;
-	char * po_list = message->buf + proj_name_len;
+	char * po_list_buf = message->buf + proj_name_len;
 	//Make a projdir
 	struct gidit_projdir *proj_dir = new_projdir(base_path, sha1_to_hex(message->pgp),proj_name);
 	//Turn char *po list to num_po and **polist
 	int num_po = 0;
 	struct gidit_pushobj **polist = NULL;
-	num_po = str_to_polist(po_list, &polist);
+
+	logerror("calling str_to_polist");
+
+	num_po = str_to_polist(po_list_buf, &polist);
+
+	logerror("about to update pushobj_list, nr: %d", num_po);
+
 	//Save the push_obj in the appropriate place
 	if (gidit_update_pushobj_list(proj_dir, num_po, polist)) {
 		//Failure
 		logerror("gidit_update_pushobj_list failed");
 		kill(ntohl(message->pid), SIGUSR2);
+		return;
 	}
+	logerror("We made it\n");
 	//We made it!
 	kill(ntohl(message->pid), SIGUSR1);
 }
 
-// int gidit_store_bundle(const char * basepath, const char * start_sha1, const char * end_sha1, int bundle_len, const char * bundle);
 static void deliver_store_bundle(Key *k, Message *m)
 {
 	struct bundle_message * msg = (struct bundle_message *)m->payload;
@@ -356,7 +368,7 @@ static void gidit_daemon_init(char * bootstrap_addr, int bootstrap_port, int loc
 	chimera_join(chimera_state, host);
 }
 
-static int dht_push(char force, char *project_name, uint32_t pgp_key_len, char *pgp_key, char** push_obj)
+static int dht_push(char force, char *project_name, uint32_t pgp_key_len, char *pgp_key, char ** push_obj)
 {
 	unsigned char sha1[20];
 	Key chimera_key;
@@ -387,9 +399,14 @@ static int dht_push(char force, char *project_name, uint32_t pgp_key_len, char *
 
 	while (!push_returned)
 		sleep(1);
-	
 
-	if (push_returned == 1)//And not 2
+	fprintf(stderr, "push_returned was: %d\n", push_returned);
+
+	git_SHA1_Init(&c);
+	git_SHA1_Update(&c, pgp_key, pgp_key_len);
+	git_SHA1_Final(sha1, &c);
+
+	if (push_returned == 1) //And not 2
 		*push_obj = gidit_po_list(base_path, sha1_to_hex(sha1), project_name);
 
 	free(message);
@@ -559,6 +576,8 @@ static int execute(struct sockaddr *addr)
 
 			ret = dht_push(force_push, project_name.buf, pgp_len, pgp_key, &push_obj);
 
+			fprintf(stderr, "dht_push returned\n");
+
 			if (ret == -1)
 				logerror("Failed to send dht message");
 			else if (ret == 1) {
@@ -579,12 +598,10 @@ static int execute(struct sockaddr *addr)
 				//write 0, send push object
 				char * message = "Waiting for Push Object and Bundle";
 				logerror(message);
-				if (write(0, &ret, sizeof(char)) != sizeof(char))
-					die("Error talking to client");
+				client_ack(0, ret, message);
 				if(!force_push) {
-					if (write(0, message, strlen(message)+1) != strlen(message)+1)
-						die("Error talking to client");
-					if (write(0, push_obj, strlen(push_obj)+1) != strlen(push_obj) +1)
+					write(0, "aa\n", 3);
+					if (write(0, push_obj, strlen(push_obj)) != strlen(push_obj))
 						die("Error talking to client");
 				}
 				FILE * fd;

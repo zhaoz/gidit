@@ -1128,6 +1128,7 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
 	
 	sock = connect_to_daemon(&addr, host, port);
 
+
 	// [message type][pgp len][pgp key][projectname]
 	if (force)
 		strbuf_addch(&msg, GIDIT_PUSHF_MSG);
@@ -1150,17 +1151,19 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
 
 	if (read_ack(sock))
 		die("Push failed early");
-	
-	// now receive the pushobject
-	fd = fdopen(sock, "r+");
 
+	// now receive the pushobject
+
+	fd = fdopen(sock, "r+");
 	if (!fd) {
 		perror("failed fdopen");
 		exit(1);
 	}
 
+	strbuf_getline(&msg, fd, '\n');
+
 	if (!force) {
-		if (gidit_read_pushobj(fd, &po, 1))
+		if (gidit_read_pushobj(fd, &po, 0))
 			die("Could not read pushobj");
 
 		// verify the given pushobject
@@ -1207,13 +1210,15 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
  */
 int gidit_update_pushobj_list(struct gidit_projdir * pd, int num_po, struct gidit_pushobj ** polist)
 {
-	char found = 0;
+	char found = -1;
 	int rc = 0;
 	int ii;
-	struct gidit_pushobj tmp;
+	struct gidit_pushobj tmp = PO_INIT;
 
-	if (!sha1_to_pushobj(&tmp, pd, pd->head))
+	if (sha1_to_pushobj(&tmp, pd, pd->head)) {
+		fprintf(stderr, "failed sha1_to_pushobj on head\n");
 		return 1;
+	}
 
 	// loop through the polists given and see if they exist
 	for (ii = 0; ii < num_po; ++ii) {
@@ -1240,11 +1245,11 @@ int gidit_update_pushobj_list(struct gidit_projdir * pd, int num_po, struct gidi
 
 	pushobj_release(&tmp);
 
-	if (!found)		// didn't find a similar head something is wrong
+	if (found != -1)		// didn't find a similar head something is wrong
 		return error("No fastforward found from known latest pushobj");
 	
 	// we have last known, start updating
-	for (ii = found - 1; ii != 0; --ii) {
+	for (ii = found - 1; ii >= 0; --ii) {
 		struct gidit_pushobj *po = polist[ii];
 
 		if (pushobj_add_to_list(pd, po) != 0)
