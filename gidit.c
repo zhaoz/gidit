@@ -337,7 +337,9 @@ static int init_projdir(struct gidit_projdir * pd)
 		return -1;
 
 	// first get the pgp stuff
-	path = (char *)xmalloc(strlen(pd->userdir) + 1 + 3);
+	len = strlen(pd->userdir) + 1 + 3;
+	path = (char *)xmalloc(len + 1);
+	path[len] = '\0';
 	sprintf(path, "%s/PGP", pd->userdir);
 
 	fp = fopen(path, "r");
