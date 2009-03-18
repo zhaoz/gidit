@@ -171,13 +171,13 @@ static void dht_del (Key * k, Message * m)
 		return_message * message;
 		message = (return_message *)m->payload;
 
-		logerror("RECEIVED RETURN");
+		logerror("RECEIVED RETURN VAL%d",ntohl(message->return_val));
 
-		if (ntohl(message->return_val)){	//Tell the handler that there is no push_obj, go home
-			if(message->force)
-				kill(ntohl(message->pid), SIGUSR1);
-			else
+		if(message->force){
+			if (ntohl(message->return_val))//Tell the handler that there is no push_obj, go home
 				kill(ntohl(message->pid), SIGUSR2);
+			else
+				kill(ntohl(message->pid), SIGUSR1);
 			return;
 		}
 		//Parse the payload
@@ -286,13 +286,12 @@ static int dht_push(char force, char *project_name, uint32_t pgp_key_len, char *
 	while (!push_returned)
 		sleep(1);
 	
-	
 
 	if (push_returned == 1)
 		*push_obj = gidit_po_list(base_path, sha1_to_hex(sha1), project_name);
 
 	free(message);
-	return(push_returned-1);
+	return push_returned -1;
 }
 
 static char *xstrdup_tolower(const char *str)
@@ -380,17 +379,23 @@ static int execute(struct sockaddr *addr)
 
 			ret = dht_push(force_push, project_name.buf, pgp_len, pgp_key, &push_obj);
 
-			if (ret == -1) {
+			if (ret == -1)
 				logerror("Failed to send dht message");
-			} else if (ret == 1) {
+			else if (ret == 1) {
+
 				char * message = "No Pushobject Found";
 				logerror(message);
+
+				if(force_push)
+					ret = 0;
+
 				if (write(0, &ret, sizeof(char)) != sizeof(char))
 					die("Error talking to client");
 				if (write(0, message, strlen(message)+1) != strlen(message)+1)
 					logerror("Error talking to client");
-				//write 1, no pushobject found
-			} else if (ret == 0) {
+
+			}
+			if (ret == 0) {
 				//write 0, send push object
 				char * message = "Pushobject Found";
 				logerror(message);
