@@ -406,10 +406,12 @@ static int execute(struct sockaddr *addr)
 				logerror(message);
 				if (write(0, &ret, sizeof(char)) != sizeof(char))
 					die("Error talking to client");
-				if (write(0, message, strlen(message)+1) != strlen(message)+1)
-					die("Error talking to client");
-				if (write(0, push_obj, strlen(push_obj)+1) != strlen(push_obj) +1)
-					die("Error talking to client");
+				if(!force_push){
+					if (write(0, message, strlen(message)+1) != strlen(message)+1)
+						die("Error talking to client");
+					if (write(0, push_obj, strlen(push_obj)+1) != strlen(push_obj) +1)
+						die("Error talking to client");
+				}
 			}
 			break;
 		default:
