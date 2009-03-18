@@ -145,7 +145,7 @@ static void dht_del (Key * k, Message * m)
 		int return_size = 0;
 		git_SHA_CTX c;
 
-		logerror("Received message:\n\tPID:%d\n\tPROJ:%s",ntohl(message->pid),proj_name);
+		logerror("RECEIVED PUSH:\n\tPID:%d\n\tPROJ:%s",ntohl(message->pid),proj_name);
 
 		if(message->force){
 			if(gidit_proj_init(base_path, ntohl(message->pgp_len), pgp, proj_name, 0))
@@ -189,6 +189,8 @@ static void dht_del (Key * k, Message * m)
 	} else if (m->type == RETURN_PUSH) {
 		return_message * message;
 		message = (return_message *)m->payload;
+
+		logerror("RECEIVED RETURN");
 
 		if(message->force){
 			if(ntohl(message->return_val))
@@ -307,7 +309,9 @@ static int dht_push(char force, char *project_name, uint32_t pgp_key_len, char *
 	while (!push_returned)
 		sleep(1);
 	
-	if (push_returned == 1)
+	
+
+	if (push_returned == 1 && !force)
 		*push_obj = gidit_po_list(base_path, sha1_to_hex(sha1), project_name);
 
 	free(message);

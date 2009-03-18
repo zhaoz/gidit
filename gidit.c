@@ -330,28 +330,22 @@ static int init_projdir(struct gidit_projdir * pd)
 	char * path = NULL;
 	FILE * fp;
 
-	fprintf(stderr,"1\n");
 	if (access(pd->userdir, R_OK|W_OK))
 		return error("User does not exist");
 	
-	fprintf(stderr,"2\n");
 	if (safe_create_dir(pd->projdir))
 		return -1;
 
-	fprintf(stderr,"3\n");
 	// first get the pgp stuff
 	len = strlen(pd->userdir) + 1 + 3;
 	path = (char *)xmalloc(len + 1);
 	path[len] = '\0';
 	sprintf(path, "%s/PGP", pd->userdir);
 
-	fprintf(stderr,"4\n");
 	fp = fopen(path, "r");
 
-	fprintf(stderr,"5\n");
 	free(path);
 
-	fprintf(stderr,"6\n");
 	if (!fp)
 		return error("error while opening pgp file for reading");
 
@@ -362,19 +356,15 @@ static int init_projdir(struct gidit_projdir * pd)
 	len = fread(pd->pgp, pd->pgp_len, 1, fp);
 	fclose(fp);
 
-	fprintf(stderr,"7\n");
 	if (len != 1)
 		return error("error while retrieving PGP info");
 
-	fprintf(stderr,"8\n");
 	if (access(pd->userdir, W_OK|R_OK|X_OK) != 0)
 		return error("Unknown user/pgp key, please initialize user first\n");
 
-	fprintf(stderr,"9\n");
 	path = (char*)xmalloc(strlen(pd->projdir) + 1 + 4 + 1);
 	sprintf(path, "%s/HEAD", pd->projdir);
 
-	fprintf(stderr,"11\n");
 	if (access(path, F_OK) == 0) {
 		fp = fopen(path, "r");
 
@@ -393,10 +383,8 @@ static int init_projdir(struct gidit_projdir * pd)
 		pd->head[40] = '\0';
 		fprintf(fp, "%s\n", pd->head);
 	}
-	fprintf(stderr,"12\n");
 	free(path);
 	fclose(fp);
-	fprintf(stderr,"13\n");
 
 	return 0;
 }
@@ -696,40 +684,31 @@ int gidit_proj_init(const char * basepath, int pgp_len,
 	git_SHA1_Update(&c, pgp_key, pgp_len);
 	git_SHA1_Final(sha1, &c);
 
-	fprintf(stderr,"1\n");
 	// change dir to pushobjects dir
 	if (chdir(basepath) || chdir(PUSHOBJ_DIR))
 		return error("Error going to pushobjects directory\n");
 
-	fprintf(stderr,"2\n");
 	sprintf(pgp_sha1, "%s", sha1_to_hex(sha1));
 
-	fprintf(stderr,"3\n");
 	if (safe_create_dir(pgp_sha1))
 		exit(1);
 
-	fprintf(stderr,"4\n");
 	chdir(pgp_sha1);
 
-	fprintf(stderr,"5\n");
 	// now ensure the project directories existence
 	if (safe_create_dir(projname))
 		exit(1);
 
-	fprintf(stderr,"6\n");
 	// if pgp key file already exists, not need to resave
 	if (access("PGP", F_OK)) {
 		// save the PGP key in there
-		fprintf(stderr,"7\n");
 		pgp_fp = fopen("PGP", "w");
 
 		if (!pgp_fp)
 			die("Error while saving PGP key");
 
-	fprintf(stderr,"8\n");
 		fwrite(pgp_key, pgp_len, 1, pgp_fp);
 
-	fprintf(stderr,"9\n");
 		fclose(pgp_fp);
 	}
 
