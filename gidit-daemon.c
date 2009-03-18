@@ -139,7 +139,7 @@ static void dht_del (Key * k, Message * m)
 		unsigned char sha1[20];
 		push_message * message = (push_message *) m->payload;
 		char * proj_name = message->buf;
-		char * pgp = message->buf + ntohl(message->name_len);
+		unsigned char * pgp = (unsigned char*)(message->buf + ntohl(message->name_len));
 		return_message * rmessage;
 		char *push_obj = NULL;
 		int return_size = 0;
