@@ -19,6 +19,7 @@
 //GIDIT-UPCALLS
 #define GET_PO_LIST 15
 #define RETURN_PO_LIST 16
+#define SET_PO 17
 #define STORE_BUNDLE 19
 #define RETURN_ACK 20
 
@@ -346,6 +347,8 @@ static void gidit_daemon_init(char * bootstrap_addr, int bootstrap_port, int loc
 	chimera_register (chimera_state, GET_PO_LIST, 1);
 	chimera_register (chimera_state, RETURN_PO_LIST, 1);
 	chimera_register (chimera_state, SET_PO, 1);
+	chimera_register (chimera_state, STORE_BUNDLE, 1);
+	chimera_register (chimera_state, RETURN_ACK, 1);
 	chimera_join(chimera_state, host);
 }
 
