@@ -1264,20 +1264,20 @@ static struct gidit_pushobj * pushobj_init()
 	return po;
 }
 
-int gidit_verify_pushobj_list(FILE * fp)
+static int read_pushobj_list(FILE * fp, struct gidit_pushobj *** polist)
 {
 	int nr = 0;
-	int rc = 0;
 	int size = 4;
-	struct gidit_pushobj ** polist = xcalloc(size, sizeof(struct gidit_pushobj*));
 	struct gidit_pushobj * po = pushobj_init();
+
+	*polist = xcalloc(size, sizeof(struct gidit_pushobj*));
 
 	while (!gidit_read_pushobj(fp, po, 0)) {
 		if (nr == size) {
 			size += 4;
-			polist = xrealloc(polist, sizeof(struct gidit_pushobj*) * size);
+			*polist = xrealloc(*polist, sizeof(struct gidit_pushobj*) * size);
 		}
-		polist[nr] = po;
+		(*polist)[nr] = po;
 
 		po = pushobj_init();
 
@@ -1287,7 +1287,20 @@ int gidit_verify_pushobj_list(FILE * fp)
 	pushobj_release(po);
 	free(po);
 
-	polist = xrealloc(polist, sizeof(struct gidit_pushobj*) * nr);
+	*polist = xrealloc(*polist, sizeof(struct gidit_pushobj*) * nr);
+
+	return nr;
+}
+
+int gidit_verify_pushobj_list(FILE * fp)
+{
+	int nr = 0;
+	int rc = 0;
+	struct gidit_pushobj ** polist = NULL;
+
+	nr = read_pushobj_list(fp, &polist);
+
+	fprintf(stderr, "nr was :%d\n", nr);
 
 	rc = verify_pushobj_list(nr, polist);
 
