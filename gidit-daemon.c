@@ -105,6 +105,7 @@ static void NORETURN daemon_die(const char *err, va_list params)
 //GIDIT-UPCALLS
 #define GET_PO_LIST 15
 #define RETURN_PO_LIST 16
+#define SET_PO 17
 
 static ChimeraState * chimera_state;
 volatile sig_atomic_t push_returned = 0;
@@ -247,6 +248,7 @@ static void gidit_daemon_init(char * bootstrap_addr, int bootstrap_port, int loc
 	chimera_setkey (chimera_state, key);
 	chimera_register (chimera_state, GET_PO_LIST, 1);
 	chimera_register (chimera_state, RETURN_PO_LIST, 1);
+	chimera_register (chimera_state, SET_PO, 1);
 	chimera_join(chimera_state, host);
 }
 
@@ -308,9 +310,19 @@ static void safe_read(int fd, void *buffer, unsigned size)
 }
 
 
-static int dht_push_po()
+//if(dht_push_po( project_name.buf, pgp_len, pgp_key, &po))
+static int dht_push_po(char *project_name, uint32_t pgp_len, char *pgp_key, struct gidit_pushobj * po)
 {
-	
+	unsigned char sha1[20];
+	git_SHA_CTX c;	
+
+	git_SHA1_Init(&c);
+	git_SHA1_Update(&c, pgp_key, pgp_len);
+	git_SHA1_Update(&c, project_name, strlen(project_name)+1);
+	git_SHA1_Final(sha1, &c);
+
+	//Put po in a buffer?
+
 	return 0;
 }
 
@@ -422,7 +434,7 @@ static int execute(struct sockaddr *addr)
 				bundle = (char*) malloc (bundle_len);	
 				safe_read(0, bundle, bundle_len);
 
-				if(dht_push_po())
+				if(dht_push_po( project_name.buf, pgp_len, pgp_key, &po))
 					die("Error sending push object");
 
 				if(dht_push_bundle())
