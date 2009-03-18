@@ -451,15 +451,13 @@ static int gen_pushobj(struct gidit_pushobj * po, const char *signingkey,
 struct gidit_projdir * new_projdir(const char * basepath, const char * sha1_hex, 
 		const char * projname)
 {
-	ssize_t bd_size;
 	struct gidit_projdir  * pd = NULL;
 
 	pd = (struct gidit_projdir *)xmalloc(sizeof(struct gidit_projdir ));
-	bd_size = strlen(basepath) + 1; 
 
 	// Set basepath
-	pd->basepath = (char*)xmalloc(bd_size);
-	memcpy(pd->basepath, basepath, bd_size);
+	pd->basepath = (char*)xmalloc(strlen(basepath) + 1);
+	strcpy(pd->basepath, basepath);
 
 	// convert given sha1_hex, to binary sha1
 	get_sha1_hex(sha1_hex, pd->pgp_sha1);
@@ -470,7 +468,7 @@ struct gidit_projdir * new_projdir(const char * basepath, const char * sha1_hex,
 	sprintf(pd->userdir, "%s/%s/%s", basepath, PUSHOBJ_DIR, sha1_hex);
 
 	// set the project directory inside userdir
-	pd->projdir = (char*)xmalloc(strlen(pd->userdir) + strlen(projname) + 1);
+	pd->projdir = (char*)xmalloc(strlen(pd->userdir) + 1 + strlen(projname) + 1);
 	sprintf(pd->projdir, "%s/%s", pd->userdir, projname);
 
 	pd->projname = (char*)xmalloc(strlen(projname) + 1);
