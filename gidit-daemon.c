@@ -150,6 +150,13 @@ static void dht_del (Key * k, Message * m)
 		if(message->force){
 			if(gidit_proj_init(base_path, ntohl(message->pgp_len), pgp, proj_name, 0))
 				die("Error initializing project");
+			rmessage = (return_message*) malloc (sizeof(return_message));
+			rmessage->return_val = htonl(0);
+			rmessage->force = message->force;
+			rmessage->pid = message->pid; //Might as well stay in network-order
+
+			chimera_send(chimera_state, message->source, RETURN_PUSH, sizeof(return_message), (char*)rmessage);
+			return;
 		}
 
 		git_SHA1_Init(&c);
@@ -161,10 +168,9 @@ static void dht_del (Key * k, Message * m)
 		push_obj = gidit_po_list(base_path, sha1_to_hex(sha1), proj_name);
 
 		if (!push_obj) {
+			logerror("Failed to find PO");
 			rmessage = (return_message*) malloc (sizeof(return_message));
 			rmessage->return_val = htonl(1);
-			if(message->force)
-				rmessage->return_val = htonl(0);
 		} else {
 			return_size = strlen(push_obj) + 1;
 			rmessage = (return_message*) malloc (sizeof(return_message) + return_size + message->name_len);
