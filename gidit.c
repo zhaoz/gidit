@@ -552,7 +552,7 @@ static int sha1_to_pushobj(struct gidit_pushobj *po, const struct gidit_projdir 
 	char * path = NULL;
 
 	if (strncmp(sha1, END_SHA1, 40) == 0)
-		return error("Invalid sha1");
+		return -1;
 
 	path = xmalloc(strlen(pd->projdir) + 1 + 40 + 1);
 	sprintf(path, "%s/%s", pd->projdir, sha1);

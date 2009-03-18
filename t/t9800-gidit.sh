@@ -138,7 +138,6 @@ test_expect_code 1 'verify pushobject with bad ref should fail' '
 	(echo "000000000AB1F000000000000000000000000000 fake" && cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD`) | git gidit --verify-pobj 
 '
 
-
 test_expect_success 'second pobj creation should work' '
 	echo "stuff" > tmp2 &&
 	git add tmp2 &&
