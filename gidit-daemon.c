@@ -131,7 +131,6 @@ static void dht_fwd (Key ** kp, Message ** mp, ChimeraHost ** hp)
 {
 }
 
-
 static int handle_po_message(struct set_po_message * message)
 {
 	struct gidit_projdir * pd;
@@ -162,84 +161,102 @@ static int handle_po_message(struct set_po_message * message)
 	return 0;
 }
 
+static void deliver_get_po_list(Key *k, Message *m)
+{		
+	unsigned char sha1[20];
+	push_message * message = (push_message *) m->payload;
+	char * proj_name = message->buf;
+	unsigned char * pgp = (unsigned char*)(message->buf + ntohl(message->name_len));
+	return_message * rmessage;
+	char *push_obj = NULL;
+	int return_size = 0;
+	git_SHA_CTX c;
+
+	logerror("RECEIVED %s:\n\tPID:%d\n\tPROJ:%s", message->force ? "PUSHF" : "PUSH", ntohl(message->pid),proj_name);
+
+	if (message->force) {
+		if(gidit_proj_init(base_path, ntohl(message->pgp_len), pgp, proj_name, 0))
+			die("Error initializing project");
+	}
+
+	git_SHA1_Init(&c);
+	git_SHA1_Update(&c, pgp, ntohl(message->pgp_len));
+	git_SHA1_Final(sha1, &c);
+
+	//Find pobj list given message->pgp and message->name
+	//If its not there, set the return_val to 0
+	push_obj = gidit_po_list(base_path, sha1_to_hex(sha1), proj_name);
+
+	if (!push_obj) {
+		logerror("Failed to find PO");
+		rmessage = (return_message*) malloc (sizeof(return_message));
+		rmessage->return_val = htonl(1);
+	} else {
+		return_size = strlen(push_obj) + 1;
+		rmessage = (return_message*) malloc (sizeof(return_message) + return_size + message->name_len);
+		rmessage->return_val = htonl(0);
+		rmessage->buf_len = htonl(return_size + ntohl(message->name_len));
+		memcpy(rmessage->pgp, sha1, sizeof(rmessage->pgp));
+		memcpy(rmessage->buf, proj_name, ntohl(message->name_len));
+		memcpy(rmessage->buf + ntohl(message->name_len), push_obj, return_size);
+		return_size += ntohl(message->name_len);
+		free(push_obj);
+	}
+	rmessage->force = message->force;
+	rmessage->pid = message->pid; //Might as well stay in network-order
+
+	chimera_send(chimera_state, message->source, RETURN_PO_LIST, sizeof(return_message)+return_size, (char*)rmessage);
+}
+
+static void deliver_return_po_list(Key *k, Message *m)
+{		
+	return_message * message;
+	message = (return_message *)m->payload;
+
+	logerror("RECEIVED RETURN VAL%d",ntohl(message->return_val));
+
+	if (ntohl(message->return_val)){//Tell the handler that there is no push_obj, go home
+		kill(ntohl(message->pid), SIGUSR2);
+		return;
+	}
+
+	//Parse the payload
+	char * proj_name = message->buf;
+	int proj_name_len = strlen(message->buf) + 1;
+	char * po_list = message->buf + proj_name_len;
+	//Make a projdir
+	struct gidit_projdir *proj_dir = new_projdir(base_path, sha1_to_hex(message->pgp),proj_name);
+	//Turn char *po list to num_po and **polist
+	int num_po = 0;
+	struct gidit_pushobj **polist = NULL;
+	num_po = str_to_polist(po_list, &polist);
+	//Save the push_obj in the appropriate place
+	if (gidit_update_pushobj_list(proj_dir, num_po, polist)) {
+		//Failure
+		logerror("gidit_update_pushobj_list failed");
+		kill(ntohl(message->pid), SIGUSR2);
+	}
+	//We made it!
+	kill(ntohl(message->pid), SIGUSR1);
+}
+
+
 static void dht_del (Key * k, Message * m)
 {
-	if (m->type == GET_PO_LIST) {
-		unsigned char sha1[20];
-		push_message * message = (push_message *) m->payload;
-		char * proj_name = message->buf;
-		unsigned char * pgp = (unsigned char*)(message->buf + ntohl(message->name_len));
-		return_message * rmessage;
-		char *push_obj = NULL;
-		int return_size = 0;
-		git_SHA_CTX c;
+	switch (m->type) {
+		case GET_PO_LIST:
+			deliver_get_po_list(k, m);
+			break;
+		case RETURN_PO_LIST:
+			deliver_return_po_list(k, m);
+			break;
+		case SET_PO:
+			if(handle_po_message((struct set_po_message *)m->payload))
+				die("Error handling set po");
+			break;
+		default:
+			logerror("unknown type: %d\n", m->type);
 
-		logerror("RECEIVED %s:\n\tPID:%d\n\tPROJ:%s", message->force ? "PUSHF" : "PUSH", ntohl(message->pid),proj_name);
-
-		if (message->force) {
-			if(gidit_proj_init(base_path, ntohl(message->pgp_len), pgp, proj_name, 0))
-				die("Error initializing project");
-		}
-
-		git_SHA1_Init(&c);
-		git_SHA1_Update(&c, pgp, ntohl(message->pgp_len));
-		git_SHA1_Final(sha1, &c);
-
-		//Find pobj list given message->pgp and message->name
-		//If its not there, set the return_val to 0
-		push_obj = gidit_po_list(base_path, sha1_to_hex(sha1), proj_name);
-
-		if (!push_obj) {
-			logerror("Failed to find PO");
-			rmessage = (return_message*) malloc (sizeof(return_message));
-			rmessage->return_val = htonl(1);
-		} else {
-			return_size = strlen(push_obj) + 1;
-			rmessage = (return_message*) malloc (sizeof(return_message) + return_size + message->name_len);
-			rmessage->return_val = htonl(0);
-			rmessage->buf_len = htonl(return_size + ntohl(message->name_len));
-			memcpy(rmessage->pgp, sha1, sizeof(rmessage->pgp));
-			memcpy(rmessage->buf, proj_name, ntohl(message->name_len));
-			memcpy(rmessage->buf + ntohl(message->name_len), push_obj, return_size);
-			return_size += ntohl(message->name_len);
-			free(push_obj);
-		}
-		rmessage->force = message->force;
-		rmessage->pid = message->pid; //Might as well stay in network-order
-
-		chimera_send(chimera_state, message->source, RETURN_PO_LIST, sizeof(return_message)+return_size, (char*)rmessage);
-	} else if (m->type == RETURN_PO_LIST) {
-		return_message * message;
-		message = (return_message *)m->payload;
-
-		logerror("RECEIVED RETURN VAL%d",ntohl(message->return_val));
-
-		if (ntohl(message->return_val)){//Tell the handler that there is no push_obj, go home
-			kill(ntohl(message->pid), SIGUSR2);
-			return;
-		}
-
-		//Parse the payload
-		char * proj_name = message->buf;
-		int proj_name_len = strlen(message->buf) + 1;
-		char * po_list = message->buf + proj_name_len;
-		//Make a projdir
-		struct gidit_projdir *proj_dir = new_projdir(base_path, sha1_to_hex(message->pgp),proj_name);
-		//Turn char *po list to num_po and **polist
-		int num_po = 0;
-		struct gidit_pushobj **polist = NULL;
-		num_po = str_to_polist(po_list, &polist);
-		//Save the push_obj in the appropriate place
-		if (gidit_update_pushobj_list(proj_dir, num_po, polist)) {
-			//Failure
-			logerror("gidit_update_pushobj_list failed");
-			kill(ntohl(message->pid), SIGUSR2);
-		}
-		//We made it!
-		kill(ntohl(message->pid), SIGUSR1);
-	} else if (m->type == SET_PO) {
-		if(handle_po_message((struct set_po_message *)m->payload))
-			die("Error handling set po");
 	}
 }
 
