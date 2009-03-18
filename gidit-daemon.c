@@ -413,7 +413,7 @@ static int execute(struct sockaddr *addr)
 				struct gidit_pushobj po = PO_INIT;
 				char * bundle;
 
-				if(gidit_read_pushobj(fd, &po))
+				if (gidit_read_pushobj(fd, &po, 0))
 					die("Error reading push object");
 
 				safe_read(0, &bundle_len, sizeof(uint32_t));
