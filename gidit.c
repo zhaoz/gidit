@@ -308,7 +308,9 @@ static char read_ack(int fd)
 static void print_pushobj(FILE * fp, struct gidit_pushobj *po)
 {
 	int ii;
+
 	fprintf(fp, "%s HEAD\n", po->head);
+
 	for (ii = 0; ii < po->lines; ii++)
 		fprintf(fp, "%s\n", po->refs[ii]);
 	fprintf(fp, "%s", po->signature);
@@ -432,6 +434,8 @@ static int gen_pushobj(struct gidit_pushobj * po, const char *signingkey,
 		po->refs[ii] = (char*)xmalloc(strlen(list.items[ii].string) + 1);
 		strcpy(po->refs[ii], list.items[ii].string);
 	}
+
+	fprintf(stderr, "in gen_pushojb\n");
 
 	if (flags & SIGN)
 		do_sign(&sig, &buf, signingkey);
@@ -1153,7 +1157,7 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
 		die("Push failed early");
 	
 	// now receive the pushobject
-	fd = fdopen(sock, "r");
+	fd = fdopen(sock, "r+");
 
 	if (!fd) {
 		perror("failed fdopen");
@@ -1172,18 +1176,22 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
 	// create new pushobject and send it off
 	if (!gen_pushobj(&po_new, signingkey, flags))
 		die("Failed to generate new pushobject");
-	
-	// generate the bundle, store in msg
-	if (gen_bundle(&msg, po.head, po_new.head))
-		die("Failed to generate bundle");
+
 	
 	// send the bundle and the new pobj off
 	print_pushobj(fd, &po_new);
 
+	// generate the bundle, store in msg
+	if (gen_bundle(&msg, force ? NULL : po.head, po_new.head))
+		die("Failed to generate bundle");
+
+	fprintf(stderr, "bundle size is: %d\n", msg.len);
 	len = htonl(msg.len);
-	if (fwrite(&len, sizeof(uint32_t), 1, fd) != 1 || 
-			fwrite(msg.buf, msg.len, 1, fd) != 1)
-		die("Failed to send bundle");
+	if (xwrite(sock, &len, sizeof(uint32_t)) != sizeof(uint32_t))
+		die("Failed to send bundlesize ");
+
+	if (write_in_full(sock, msg.buf, msg.len) != msg.len)
+		die("Failed to send bundle ");
 
 	pushobj_release(&po_new);
 	strbuf_release(&msg);
