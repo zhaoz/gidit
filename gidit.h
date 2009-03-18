@@ -191,4 +191,7 @@ void pushobj_to_sha1(unsigned char * sha1, struct gidit_pushobj *po);
 
 int gidit_test(FILE *fp);
 
+char strbuf_getlinefd(struct strbuf * sb, int fd, char term);
+int gidit_read_pushobj_fd(int fd, struct gidit_pushobj *po, int read_prev);
+
 #endif		// GIDIT_H

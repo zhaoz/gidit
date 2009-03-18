@@ -576,8 +576,6 @@ static int execute(struct sockaddr *addr)
 
 			ret = dht_push(force_push, project_name.buf, pgp_len, pgp_key, &push_obj);
 
-			fprintf(stderr, "dht_push returned\n");
-
 			if (ret == -1)
 				logerror("Failed to send dht message");
 			else if (ret == 1) {
@@ -600,10 +598,12 @@ static int execute(struct sockaddr *addr)
 				logerror(message);
 				client_ack(0, ret, message);
 				if(!force_push) {
+					logerror("Given latest push obj to client:\n%s", push_obj);
 					write(0, "aa\n", 3);
 					if (write(0, push_obj, strlen(push_obj)) != strlen(push_obj))
 						die("Error talking to client");
 				}
+
 				FILE * fd;
 				fd = fdopen(0, "r");
 
@@ -613,17 +613,34 @@ static int execute(struct sockaddr *addr)
 				}
 				struct gidit_pushobj po = PO_INIT;
 
+				logerror("preparing to read pushobj");
+
 				if (gidit_read_pushobj(fd, &po, 0))
 					die("Error reading push object");
+
+				logerror("Received pushobject\n");
 
 				if(dht_push_po(project_name.buf, pgp_len, pgp_key, &po))
 					die("Error sending push object");
 
-				safe_read(0, &bundle_len, sizeof(uint32_t));
+				logerror("Receiving bundle size");
+
+				// if (read(0, &bundle_len, sizeof(uint32_t)) != sizeof(uint32_t))
+				if (fread(&bundle_len, sizeof(uint32_t), 1, fd) != 1) {
+					perror("bundlelen read failure");
+					die("Error while reading bundle_len");
+				}
+
 				bundle_len = ntohl(bundle_len);
 
+				logerror("Bundle size of: %d\n", bundle_len);
+
 				unsigned char * bundle = (unsigned char*)xmalloc(bundle_len);	
-				safe_read(0, bundle, bundle_len);
+				if (fread(bundle, bundle_len, 1, fd) != 1) {
+					perror("error reading bundle");
+					die("error reading bundle");
+				}
+				// safe_read(0, bundle, bundle_len);
 
 				// construct 
 				struct gidit_pushobj latest = PO_INIT;

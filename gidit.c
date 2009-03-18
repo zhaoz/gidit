@@ -305,6 +305,23 @@ static char read_ack(int fd)
 	return status;
 }
 
+static void print_pushobj_fd(int fd, struct gidit_pushobj *po)
+{
+	int ii;
+	char buf[5000];
+
+	snprintf(buf, sizeof(buf), "%s HEAD\n", po->head);
+	write(fd, buf, strlen(buf));
+
+	for (ii = 0; ii < po->lines; ii++) {
+		snprintf(buf, sizeof(buf), "%s\n", po->refs[ii]);
+		write(fd, buf, strlen(buf));
+	}
+	snprintf(buf, sizeof(buf), "%s", po->signature);
+	write(fd, buf, strlen(buf));
+	// fprintf(fp, "%s", po->signature);
+}
+
 static void print_pushobj(FILE * fp, struct gidit_pushobj *po)
 {
 	int ii;
@@ -549,6 +566,7 @@ int pushobj_add_to_list(struct gidit_projdir *pd, struct gidit_pushobj *po)
 
 /**
  * Given sha1, look up pushobj and return it
+ * return 0 on success
  */
 static int sha1_to_pushobj(struct gidit_pushobj *po, const struct gidit_projdir  *pd, 
 						const char * sha1)
@@ -916,6 +934,100 @@ int gidit_get_bundle(FILE *fp, FILE *out, const char *basepath, unsigned int fla
 	return 0;
 }
 
+char strbuf_getlinefd(struct strbuf * sb, int fd, char term) {
+	char ch;
+
+	strbuf_grow(sb, 0);
+
+	strbuf_reset(sb);
+	// while ((ch = fgetc(fp)) != EOF) {
+	while (xread(fd, &ch, sizeof(char)) != 1) {
+		if (ch == term)
+			break;
+		strbuf_grow(sb, 1);
+		sb->buf[sb->len++] = ch;
+	}
+	if (ch == 0)
+		return 1;
+	// if (ch == EOF && sb->len == 0)
+		// return EOF;
+
+	sb->buf[sb->len] = '\0';
+	return 0;
+}
+
+int gidit_read_pushobj_fd(int fd, struct gidit_pushobj *po, int read_prev)
+{
+	int ii;
+	int head = 0;
+	char * cbuf = NULL;
+	struct strbuf buf = STRBUF_INIT;
+	struct strbuf sig = STRBUF_INIT;
+	struct string_list list;
+
+	pushobj_release(po);
+
+	memset(&list, 0, sizeof(struct string_list));
+	memset(po->head, 0, 40);
+
+	// while (strbuf_getline(&buf, fp, '\n') != EOF) {
+	while (strbuf_getlinefd(&buf, fd, '\n') != 1) {
+		fprintf(stderr, "%s\n", buf.buf);
+		if (strncmp(buf.buf, PGP_SIGNATURE, strlen(PGP_SIGNATURE)) == 0)
+			break;
+
+		// check to see if this is the HEAD ref
+		if (strncmp(buf.buf + 41, "HEAD", 4) == 0) {
+			strncpy(po->head, buf.buf, 40);
+			po->head[40] = '\0';
+
+			head = 1;
+			continue;
+		}
+
+		cbuf = xmemdupz(buf.buf, buf.len);
+		string_list_append(cbuf, &list);
+	}
+
+	if (!list.nr)
+		return error("Pushobject contained no refs");
+
+	if (!head)
+		return error("pushobject did not contain HEAD ref");
+
+	po->lines = list.nr;
+	po->refs = (char**)xcalloc(list.nr, sizeof(char*));
+
+	for (ii = 0; ii < list.nr; ii++)
+		po->refs[ii] = xstrdup(list.items[ii].string);
+
+	// rest of the stuff is signature
+	strbuf_add(&sig, buf.buf, buf.len);
+	strbuf_addstr(&sig, "\n");
+	while (strbuf_getlinefd(&buf, fd, '\n') != 1) {
+		strbuf_add(&sig, buf.buf, buf.len);
+		strbuf_addstr(&sig, "\n");
+		if (strncmp(buf.buf, END_PGP_SIGNATURE, strlen(END_PGP_SIGNATURE)) == 0)
+			break;
+	}
+
+	po->signature = xmemdupz(sig.buf, sig.len);
+
+	// now the rest of the stuff is the prev pointer
+	if (read_prev && strbuf_getlinefd(&buf, fd, '\n') != 1) {
+		strncpy(po->prev, buf.buf, 40);
+		po->prev[40] = '\0';
+	} else {
+		memset(po->prev, 0, 40);
+	}
+
+	strbuf_release(&buf);
+	strbuf_release(&sig);
+	string_list_clear(&list, 0);
+
+	return 0;
+}
+
 /**
  * Given a fd, read stuff into pushobj
  * returns 0 on success
@@ -935,6 +1047,7 @@ int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po, int read_prev)
 	memset(po->head, 0, 40);
 
 	while (strbuf_getline(&buf, fp, '\n') != EOF) {
+		fprintf(stderr, "%s\n", buf.buf);
 		if (strncmp(buf.buf, PGP_SIGNATURE, strlen(PGP_SIGNATURE)) == 0)
 			break;
 
@@ -1154,20 +1267,20 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
 
 	// now receive the pushobject
 
-	fd = fdopen(sock, "r+");
+	fd = fdopen(sock, "r");
 	if (!fd) {
 		perror("failed fdopen");
 		exit(1);
 	}
 
-	strbuf_getline(&msg, fd, '\n');
 
 	if (!force) {
+		strbuf_getline(&msg, fd, '\n');
 		if (gidit_read_pushobj(fd, &po, 0))
 			die("Could not read pushobj");
 
 		// verify the given pushobject
-		if (verify_pushobj(&po) != 0)
+		if (verify_pushobj(&po))
 			die("Failed push object verification");
 	}
 	
@@ -1175,17 +1288,24 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
 	if (!gen_pushobj(&po_new, signingkey, flags))
 		die("Failed to generate new pushobject");
 
+	fprintf(stderr, "about to write pushobj\n");
+
 	// send the bundle and the new pobj off
-	print_pushobj(fd, &po_new);
+	print_pushobj(stderr, &po_new);
+	print_pushobj_fd(sock, &po_new);
 
 	// generate the bundle, store in msg
 	if (gen_bundle(&msg, force ? NULL : po.head, po_new.head))
 		die("Failed to generate bundle");
+	
 
 	len = htonl(msg.len);
+	fprintf(stderr, "sending bundlesize: %d\n", msg.len);
 	if (xwrite(sock, &len, sizeof(uint32_t)) != sizeof(uint32_t))
 		die("Failed to send bundlesize ");
 	
+	fprintf(stderr, "sending bundle\n");
+
 	if (write_in_full(sock, msg.buf, msg.len) != msg.len) {
 		perror("error in writing");
 		die("Failed to send bundle ");
@@ -1226,16 +1346,18 @@ int gidit_update_pushobj_list(struct gidit_projdir * pd, int num_po, struct gidi
 
 		// compare po to tmp and see if they match
 		if (strcmp(tmp.head, po->head) == 0) {
-			if (!found)
+			if (found == -1)
 				found = ii;
 
 			// increment to next known pushobject
 			rc = sha1_to_pushobj(&tmp, pd, tmp.prev);
 
-			if (ii + 1 != num_po && !rc) {
+			fprintf(stderr, "rc: %d, ii: %d, num_po: %d\n", rc, ii, num_po);
+
+			if (ii + 1 != num_po && rc == -1) {
 				// if we aren't on the last polist, and there are no more to walk through, we failed
 				pushobj_release(&tmp);
-				return 1;
+				return error("failed, reached end and no more to walk through");
 			}
 		} else if (found) {
 			// we've found a common pushobj, but no longer match, which means diverged chain
@@ -1245,7 +1367,7 @@ int gidit_update_pushobj_list(struct gidit_projdir * pd, int num_po, struct gidi
 
 	pushobj_release(&tmp);
 
-	if (found != -1)		// didn't find a similar head something is wrong
+	if (found == -1)		// didn't find a similar head something is wrong
 		return error("No fastforward found from known latest pushobj");
 	
 	// we have last known, start updating
