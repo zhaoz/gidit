@@ -108,7 +108,8 @@ int gidit_po_list_stream(FILE *fp, const char * basepath, unsigned int flags);
 /**
  * save a bundle
  */
-int gidit_store_bundle(FILE *fp, const char * basepath, unsigned int flags);
+int gidit_store_bundle(const char * basepath, const char * start_sha1, const char * end_sha1, int bundle_len, const char * bundle);
+int gidit_store_bundle_stream(FILE *fp, const char * basepath, unsigned int flags);
 
 /**
  * get a bundle

@@ -799,20 +799,61 @@ int gidit_po_list_stream(FILE *fp, const char * basepath, unsigned int flags)
 	return 0;
 }
 
-int gidit_store_bundle(FILE *fp, const char * basepath, unsigned int flags)
+int gidit_store_bundle(const char * basepath, const char * start_sha1, 
+						const char * end_sha1, int bundle_len, const char * bundle)
+{
+	git_SHA_CTX c;
+	unsigned char bundle_sha1[20];
+	FILE * out;
+	int rc = 0;
+	char * cwd = getcwd(NULL, 0);
+
+	if (!enter_bundle_dir(basepath, start_sha1, end_sha1))
+		return error("Failed to enter gidit pushobj dir");
+
+	git_SHA1_Init(&c);
+	git_SHA1_Update(&c, bundle, bundle_len);
+	git_SHA1_Final(bundle_sha1, &c);
+
+	out = fopen(sha1_to_hex(bundle_sha1), "w");
+
+	rc = !out || fwrite(bundle, bundle_len, 1, out) != 1;
+
+	fclose(out);
+
+	if (rc) {
+		chdir(cwd);
+		free(cwd);
+		return error("Error while writing bundle");
+	}
+
+	
+	// create BUNDLE file pointing to sha1
+	out = fopen("BUNDLES", "a");
+
+	if (!out) {
+		chdir(cwd);
+		free(cwd);
+		return error("Error while writing to BUNDLE");
+	}
+
+	fprintf(out, "%s\n", sha1_to_hex(bundle_sha1));
+	fclose(out);
+	
+	chdir(cwd);
+	free(cwd);
+
+	return 0;
+}
+
+int gidit_store_bundle_stream(FILE *fp, const char * basepath, unsigned int flags)
 {
 	char start_pobj_sha1[41];
 	char end_pobj_sha1[41];
-	unsigned char bundle_sha1[20];
 	struct strbuf bundle = STRBUF_INIT;
-	git_SHA_CTX c;
-	FILE * out;
 
 	if (!read_sha1(fp, start_pobj_sha1) || !read_sha1(fp, end_pobj_sha1))
 		return error("protocol error: could not read sha1");
-
-	if (!enter_bundle_dir(basepath, start_pobj_sha1, end_pobj_sha1))
-		return error("Failed to enter gidit pushobj dir");
 
 
 	// now we need to read in the bundle, and store it in it's own sha1
@@ -821,31 +862,13 @@ int gidit_store_bundle(FILE *fp, const char * basepath, unsigned int flags)
 	if (bundle.len == 0)
 		return error("Protocol error while reading bundle");
 
-	git_SHA1_Init(&c);
-	git_SHA1_Update(&c, bundle.buf, bundle.len);
-	git_SHA1_Final(bundle_sha1, &c);
 
-	out = fopen(sha1_to_hex(bundle_sha1), "w");
-
-	if (!out)
-		die("Error while writing bundle");
-
-	if (fwrite(bundle.buf, bundle.len, 1, out) != 1)
-		die("Error while writing to bundle");
-
-	fclose(out);
+	if (gidit_store_bundle(basepath, start_pobj_sha1, end_pobj_sha1, 
+							bundle.len, bundle.buf))
+		exit(1);
 
 	strbuf_release(&bundle);
 
-	// create BUNDLE file pointing to sha1
-	out = fopen("BUNDLES", "a");
-
-	if (!out)
-		die("Error while writing to BUNDLE");
-
-	fprintf(out, "%s\n", sha1_to_hex(bundle_sha1));
-
-	fclose(out);
 
 	return 0;
 }

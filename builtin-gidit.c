@@ -143,7 +143,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 	else if (polist)
 		rc = gidit_po_list_stream(stdin, basepath, flags);
 	else if (store_bundle)
-		rc = gidit_store_bundle(stdin, basepath, flags);
+		rc = gidit_store_bundle_stream(stdin, basepath, flags);
 	else if (get_bundle)
 		rc = gidit_get_bundle(stdin, stdout, basepath, flags);
 	else
