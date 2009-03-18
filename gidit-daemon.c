@@ -110,6 +110,14 @@ static void NORETURN daemon_die(const char *err, va_list params)
 static ChimeraState * chimera_state;
 volatile sig_atomic_t push_returned = 0;
 
+
+struct set_po_message{
+	uint32_t name_len;
+	uint32_t po_len;
+	uint32_t pgp_len;
+	char buf[];
+};
+
 void signal_one(int sig){
 	push_returned= 1;
 }
@@ -120,6 +128,37 @@ void signal_two(int sig){
 
 static void dht_fwd (Key ** kp, Message ** mp, ChimeraHost ** hp)
 {
+}
+
+
+static int handle_po_message(struct set_po_message * message)
+{
+	struct gidit_projdir * pd;
+	char * project_name = message->buf;
+	char * pgp_key = message->buf + ntohl(message->name_len);
+	char * push_obj = message->buf + ntohl(message->name_len) + ntohl(message->pgp_len);
+	struct gidit_pushobj * po = (struct gidit_pushobj*) malloc (sizeof(struct gidit_pushobj));
+	unsigned char sha1[20];
+	git_SHA_CTX c;
+
+	git_SHA1_Init(&c);
+	git_SHA1_Update(&c, pgp_key, ntohl(message->pgp_len));
+	git_SHA1_Final(sha1, &c);
+
+	str_to_pushobj(push_obj, po);
+
+	if(!push_obj)
+		die("Error converting push object");
+
+	pd = new_projdir(base_path, sha1_to_hex(sha1), project_name);
+
+	if(!pd)
+		die("Error creating project dir");
+
+	if(pushobj_add_to_list(pd, po))
+		die("Error adding push object");
+
+	return 0;
 }
 
 static void dht_del (Key * k, Message * m)
@@ -197,6 +236,9 @@ static void dht_del (Key * k, Message * m)
 		}
 		//We made it!
 		kill(ntohl(message->pid), SIGUSR1);
+	} else if (m->type == SET_PO) {
+		if(handle_po_message((struct set_po_message *)m->payload))
+			die("Error handling set po");
 	}
 }
 
@@ -309,19 +351,32 @@ static void safe_read(int fd, void *buffer, unsigned size)
 		die("The remote end hung up unexpectedly");
 }
 
-
-//if(dht_push_po( project_name.buf, pgp_len, pgp_key, &po))
 static int dht_push_po(char *project_name, uint32_t pgp_len, char *pgp_key, struct gidit_pushobj * po)
 {
 	unsigned char sha1[20];
+	struct strbuf po_str = STRBUF_INIT;
+	uint32_t length;
+	Key chimera_key;
 	git_SHA_CTX c;	
-
+	
 	git_SHA1_Init(&c);
 	git_SHA1_Update(&c, pgp_key, pgp_len);
 	git_SHA1_Update(&c, project_name, strlen(project_name)+1);
 	git_SHA1_Final(sha1, &c);
+	str_to_key(sha1_to_hex(sha1),&chimera_key);
 
-	//Put po in a buffer?
+	strbuf_appendpushobj(&po_str, po, 0);
+	length = sizeof(struct set_po_message) + strlen(project_name)+1 + pgp_len + po_str.len;
+	struct set_po_message * message = (struct set_po_message*) malloc (length);
+
+	message->name_len = htonl(strlen(project_name)+1);
+	message->po_len = htonl(po_str.len);
+	message->pgp_len = htonl(pgp_len);
+	memcpy(message->buf, project_name, strlen(project_name)+1);
+	memcpy(message->buf + strlen(project_name) + 1, po_str.buf, po_str.len);
+	memcpy(message->buf + strlen(project_name) + 1 + po_str.len, pgp_key, pgp_len);
+
+	chimera_send (chimera_state, chimera_key, SET_PO, length, (char*)message);
 
 	return 0;
 }
