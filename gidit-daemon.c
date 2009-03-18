@@ -173,13 +173,11 @@ static void dht_del (Key * k, Message * m)
 
 		logerror("RECEIVED RETURN VAL%d",ntohl(message->return_val));
 
-		if(message->force){
-			if (ntohl(message->return_val))//Tell the handler that there is no push_obj, go home
-				kill(ntohl(message->pid), SIGUSR2);
-			else
-				kill(ntohl(message->pid), SIGUSR1);
+		if (ntohl(message->return_val)){//Tell the handler that there is no push_obj, go home
+			kill(ntohl(message->pid), SIGUSR2);
 			return;
 		}
+
 		//Parse the payload
 		char * proj_name = message->buf;
 		int proj_name_len = strlen(message->buf) + 1;
@@ -279,15 +277,13 @@ static int dht_push(char force, char *project_name, uint32_t pgp_key_len, char *
 	memcpy(message->buf, project_name, name_length);
 	memcpy(message->buf + name_length, pgp_key, pgp_key_len);
 
-	logerror("Return key %s",message->source.keystr);
-
 	chimera_send (chimera_state, chimera_key, GET_PO_LIST, sizeof(push_message) + name_length + pgp_key_len, (char*)message);
 
 	while (!push_returned)
 		sleep(1);
 	
 
-	if (push_returned == 1)
+	if (push_returned == 1)//And not 2
 		*push_obj = gidit_po_list(base_path, sha1_to_hex(sha1), project_name);
 
 	free(message);
@@ -397,7 +393,7 @@ static int execute(struct sockaddr *addr)
 			}
 			if (ret == 0) {
 				//write 0, send push object
-				char * message = "Pushobject Found";
+				char * message = "Waiting for Push Object and Bundle";
 				logerror(message);
 				if (write(0, &ret, sizeof(char)) != sizeof(char))
 					die("Error talking to client");
