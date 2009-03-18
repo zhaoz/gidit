@@ -1441,7 +1441,7 @@ int str_to_polist(const char * buf, struct gidit_pushobj ***polist)
 	int size = 4; // start with 4
 	const char * pt = buf;
 
-	*polist = (struct gidit_pushobj **)xmalloc(sizeof(struct gidit_pushobj *) * size);
+	*polist = (struct gidit_pushobj **)xcalloc(size, sizeof(struct gidit_pushobj *));
 
 	while (1) {
 		if (nr == size) {
@@ -1449,12 +1449,13 @@ int str_to_polist(const char * buf, struct gidit_pushobj ***polist)
 			*polist = xrealloc(*polist, sizeof(struct gidit_pushobj *) * size);
 		}
 
-		struct gidit_pushobj * po = (struct gidit_pushobj *)xmalloc(sizeof(struct gidit_pushobj));
+		struct gidit_pushobj * po = pushobj_init();
 
 		pt = str_to_pushobj(pt, po);
 
 		if (!pt) {
-			*polist = xrealloc(*polist, sizeof(struct gidit_pushobj *) * nr);
+			pushobj_release(po);
+			free(po);
 			break;
 		}
 
@@ -1465,6 +1466,7 @@ int str_to_polist(const char * buf, struct gidit_pushobj ***polist)
 		if (pt == '\0')
 			break;
 	}
+	*polist = xrealloc(*polist, sizeof(struct gidit_pushobj *) * nr);
 
 	return nr;
 }
@@ -1472,14 +1474,23 @@ int str_to_polist(const char * buf, struct gidit_pushobj ***polist)
 int gidit_test(FILE *fp)
 {
 	struct strbuf buf = STRBUF_INIT;
-	struct gidit_pushobj po = PO_INIT;
+	// struct gidit_pushobj po = PO_INIT;
+	int nr = 0, nr2 = 0;
+	int ii = 0;
+	struct gidit_pushobj ** polist = NULL;
+	struct gidit_pushobj ** polist2 = NULL;
 
-	strbuf_read(&buf, fileno(fp), 1024);
+	nr = read_pushobj_list(fp, &polist);
 
-	str_to_pushobj(buf.buf, &po);
+	for (ii = 0; ii < nr; ii++) {
+		strbuf_appendpushobj(&buf, polist[ii], 1);
+	}
 
-	pushobj_release(&po);
-	strbuf_release(&buf);
+	nr2 = str_to_polist(buf.buf, &polist2);
+
+	if (nr2 != nr)
+		die("nr didn't match");
+	
 
 	return 0;
 }
