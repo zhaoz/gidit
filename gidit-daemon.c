@@ -16,6 +16,12 @@
 
 #define DEFAULT_BASE_PATH "/tmp/gidit/"
 
+//GIDIT-UPCALLS
+#define GET_PO_LIST 15
+#define RETURN_PO_LIST 16
+#define STORE_BUNDLE 19
+#define RETURN_ACK 20
+
 static int log_syslog;
 static int verbose;
 static int reuseaddr;
@@ -240,6 +246,32 @@ static void deliver_return_po_list(Key *k, Message *m)
 	kill(ntohl(message->pid), SIGUSR1);
 }
 
+// int gidit_store_bundle(const char * basepath, const char * start_sha1, const char * end_sha1, int bundle_len, const char * bundle);
+static void deliver_store_bundle(Key *k, Message *m)
+{
+	struct bundle_message * msg = (struct bundle_message *)m->payload;
+	struct simple_ack ret_msg;
+
+	logerror("Received a call to store bundle");
+
+	ret_msg.status = gidit_store_bundle(msg->from, msg->to, base_path, ntohl(msg->bundle_len), msg->bundle);
+	ret_msg.pid = msg->pid;
+
+	chimera_send(chimera_state, msg->source, RETURN_ACK, sizeof(ret_msg), (char*)&ret_msg);
+}
+
+static void deliver_return_ack(Key *k, Message * m)
+{
+	struct simple_ack * msg = (struct simple_ack*)m->payload;
+
+	logerror("RECEIVED: return status: %d\n", msg->status);
+
+	if (ntohl(msg->status))
+		kill(ntohl(msg->pid), SIGUSR2);
+	else
+		kill(ntohl(msg->pid), SIGUSR1);
+
+}
 
 static void dht_del (Key * k, Message * m)
 {
@@ -253,6 +285,11 @@ static void dht_del (Key * k, Message * m)
 		case SET_PO:
 			if(handle_po_message((struct set_po_message *)m->payload))
 				die("Error handling set po");
+		case STORE_BUNDLE:
+			deliver_store_bundle(k, m);
+			break;
+		case RETURN_ACK:
+			deliver_return_ack(k, m);
 			break;
 		default:
 			logerror("unknown type: %d\n", m->type);
@@ -399,7 +436,18 @@ static int dht_push_po(char *project_name, uint32_t pgp_len, char *pgp_key, stru
 	return 0;
 }
 
-static int dht_push_bundle(struct gidit_pushobj * from, 
+static void client_ack(int fd, char status, const char * msg)
+{
+	if (write(fd, &status, sizeof(char)) != sizeof(char))
+		die("Error talking to clinet");
+
+	if (msg && write(fd, msg, strlen(msg) + 1) != strlen(msg) + 1)
+		die("Error talking to clinet");
+	else if (write(fd, "\0", 1) != 1)
+		die("Error talking to clinet");
+}
+
+static int dht_send_bundle(struct gidit_pushobj * from, 
 						struct gidit_pushobj * to, int bundle_len, 
 						const unsigned char * bundle)
 {
@@ -431,14 +479,20 @@ static int dht_push_bundle(struct gidit_pushobj * from,
 	key_assign(&(msg->source),(chblob->me->key));
 	msg->pid = htonl(getpid());
 
-	msg->bundle_len = bundle_len;
+	msg->bundle_len = htonl(bundle_len);
 
 	memcpy(msg->bundle, bundle, bundle_len);
 
 	chimera_send (chimera_state, chimera_key, STORE_BUNDLE, sizeof(struct bundle_message) + bundle_len, (char*)msg);
 
+	push_returned = 0;
+
+	while (!push_returned)
+		sleep(1);
+
+
 	free(msg);
-	return 0;
+	return push_returned;
 }
 
 static int execute(struct sockaddr *addr)
@@ -519,7 +573,7 @@ static int execute(struct sockaddr *addr)
 				logerror(message);
 				if (write(0, &ret, sizeof(char)) != sizeof(char))
 					die("Error talking to client");
-				if(!force_push){
+				if(!force_push) {
 					if (write(0, message, strlen(message)+1) != strlen(message)+1)
 						die("Error talking to client");
 					if (write(0, push_obj, strlen(push_obj)+1) != strlen(push_obj) +1)
@@ -548,13 +602,17 @@ static int execute(struct sockaddr *addr)
 
 				// construct 
 				struct gidit_pushobj latest = PO_INIT;
+				int rc;
 
-				if (!str_to_pushobj(push_obj, &latest)) {
-					if (dht_push_bundle(NULL, &po, bundle_len, bundle))
-						die("Error sending bundle");
-				} else if (dht_push_bundle(&latest, &po, bundle_len, bundle)) 
-						die("Error sending bundle");
-				}
+				if (!str_to_pushobj(push_obj, &latest))
+					rc = dht_send_bundle(NULL, &po, bundle_len, bundle);
+				else 
+					rc = dht_send_bundle(&latest, &po, bundle_len, bundle);
+
+				if (rc == 1)
+					client_ack(0, 0, "bundle saved");
+				else
+					client_ack(0, 1, "failed to save bundle");
 
 				free(bundle);
 			}

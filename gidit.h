@@ -40,6 +40,12 @@ struct bundle_message {
 	char bundle[];
 };
 
+struct simple_ack {
+	uint32_t pid;
+	// Key source;
+	int32_t status;
+};
+
 typedef struct push_m {
 	char force;
 	uint32_t pid;
@@ -68,6 +74,9 @@ struct gidit_pushobj {
 
 #define PO_INIT { 0, NULL, NULL, "\0", "\0" }
 
+/**
+ * Takes ascii sha1_hex of pgp key
+ */
 struct gidit_projdir * new_projdir(const char * basepath, const char * sha1_hex, const char * projname);
 
 void free_projdir(struct gidit_projdir* pd);
@@ -116,7 +125,7 @@ char * gidit_po_list(const char * basepath, const char * pgp_sha1, const char * 
 int gidit_po_list_stream(FILE *fp, const char * basepath, unsigned int flags);
 
 /**
- * save a bundle
+ * save a bundle, return 0 on success
  */
 int gidit_store_bundle(const char * basepath, const char * start_sha1, const char * end_sha1, int bundle_len, const char * bundle);
 int gidit_store_bundle_stream(FILE *fp, const char * basepath, unsigned int flags);
