@@ -106,6 +106,7 @@ static void NORETURN daemon_die(const char *err, va_list params)
 #define GET_PO_LIST 15
 #define RETURN_PO_LIST 16
 #define SET_PO 17
+#define STORE_BUNDLE 19
 
 static ChimeraState * chimera_state;
 volatile sig_atomic_t push_returned = 0;
@@ -381,11 +382,48 @@ static int dht_push_po(char *project_name, uint32_t pgp_len, char *pgp_key, stru
 	return 0;
 }
 
-static int dht_push_bundle()
+static int dht_push_bundle(struct gidit_pushobj * from, 
+						struct gidit_pushobj * to, int bundle_len, 
+						const unsigned char * bundle)
 {
+	unsigned char sha1[20];
+	Key chimera_key;
+	git_SHA_CTX c;
+	ChimeraGlobal *chblob = (ChimeraGlobal *) chimera_state->chimera;
+	struct bundle_message * msg = xmalloc(sizeof(struct bundle_message) + bundle_len);
 
+	// hash the pgp key
+	git_SHA1_Init(&c);
+
+	if (!from) {
+		git_SHA1_Update(&c, END_SHA1, 40);
+		strcpy(msg->from, END_SHA1);
+	} else {
+		pushobj_to_sha1(sha1, from);
+		strcpy(msg->from, sha1_to_hex(sha1));
+		git_SHA1_Update(&c, msg->from, 40);
+	}
+
+	pushobj_to_sha1(sha1, to);
+	strcpy(msg->to, sha1_to_hex(sha1));
+	git_SHA1_Update(&c, msg->to, 40);
+	git_SHA1_Final(sha1, &c);
+
+	str_to_key(sha1_to_hex(sha1),&chimera_key);
+
+	key_assign(&(msg->source),(chblob->me->key));
+	msg->pid = htonl(getpid());
+
+	msg->bundle_len = bundle_len;
+
+	memcpy(msg->bundle, bundle, bundle_len);
+
+	chimera_send (chimera_state, chimera_key, STORE_BUNDLE, sizeof(struct bundle_message) + bundle_len, (char*)msg);
+
+	free(msg);
 	return 0;
 }
+
 static int execute(struct sockaddr *addr)
 {
 	char flag;
@@ -478,7 +516,6 @@ static int execute(struct sockaddr *addr)
 					break;
 				}
 				struct gidit_pushobj po = PO_INIT;
-				char * bundle;
 
 				if (gidit_read_pushobj(fd, &po, 0))
 					die("Error reading push object");
@@ -486,14 +523,21 @@ static int execute(struct sockaddr *addr)
 				safe_read(0, &bundle_len, sizeof(uint32_t));
 				bundle_len = ntohl(bundle_len);
 
-				bundle = (char*) malloc (bundle_len);	
+				unsigned char * bundle = (unsigned char*)xmalloc(bundle_len);	
 				safe_read(0, bundle, bundle_len);
 
 				if(dht_push_po( project_name.buf, pgp_len, pgp_key, &po))
 					die("Error sending push object");
 
-				if(dht_push_bundle())
-					die("Error sending bundle");
+				// construct 
+				struct gidit_pushobj latest = PO_INIT;
+
+				if (!str_to_pushobj(push_obj, &latest)) {
+					if (dht_push_bundle(NULL, &po, bundle_len, bundle))
+						die("Error sending bundle");
+				} else if (dht_push_bundle(&latest, &po, bundle_len, bundle)) 
+						die("Error sending bundle");
+				}
 
 				free(bundle);
 			}

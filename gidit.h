@@ -30,11 +30,15 @@ struct gidit_projdir {
 	char head[41];
 };
 
-typedef struct chat_m {
-	int pid;
+struct bundle_message {
+	char force;
+	uint32_t pid;
 	Key source;
-	char message[1000];
-} chat_message;
+	char from[41];
+	char to[41];
+	uint32_t bundle_len;
+	char bundle[];
+};
 
 typedef struct push_m {
 	char force;
