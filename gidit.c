@@ -27,17 +27,21 @@ static int gen_bundle(struct strbuf *bun, const char * from, const char * to)
 	struct child_process rls;
 	int len;
 	char **argv = xmalloc(6 * sizeof(char *));
-	
+
 	// generate bundle
 	memset(&rls, 0, sizeof(rls));
 	argv[0] = "bundle";
 	argv[1] = "create";
 	argv[2] = "-";
 	argv[3] = "--branches";
-	argv[4] = xmalloc(sizeof(char) * (40 + 40 + 2 + 1));
+	
+	if (from) {
+		argv[4] = xmalloc(sizeof(char) * (40 + 40 + 2 + 1));
+		sprintf(argv[4], "%s..%s", from, to);
+	} else
+		argv[4] = xstrdup(to);
 	argv[5] = NULL;
 
-	sprintf(argv[4], "%s..%s", from, to);
 
 	rls.argv = (const char**)argv;
 	rls.out = -1;
@@ -432,8 +436,7 @@ static int gen_pushobj(struct gidit_pushobj * po, const char *signingkey,
 	if (flags & SIGN)
 		do_sign(&sig, &buf, signingkey);
 	
-	po->signature = (char*)xmalloc(sig.len);
-	strncpy(po->signature, sig.buf, sig.len);
+	po->signature = xstrdup(sig.buf);
 
 	string_list_clear(&list, 0);
 	strbuf_release(&buf);
@@ -452,7 +455,7 @@ struct gidit_projdir * new_projdir(const char * basepath, const char * sha1_hex,
 	struct gidit_projdir * pd = (struct gidit_projdir *)xmalloc(sizeof(struct gidit_projdir));
 
 	// Set basepath
-	pd->basepath = xmemdupz(basepath, strlen(basepath));
+	pd->basepath = xstrdup(basepath);
 
 	// convert given sha1_hex, to binary sha1
 	get_sha1_hex(sha1_hex, pd->pgp_sha1);
@@ -466,7 +469,7 @@ struct gidit_projdir * new_projdir(const char * basepath, const char * sha1_hex,
 	pd->projdir = (char*)xmalloc(strlen(pd->userdir) + 1 + strlen(projname) + 1);
 	sprintf(pd->projdir, "%s/%s", pd->userdir, projname);
 
-	pd->projname = xmemdupz(projname, strlen(projname));
+	pd->projname = xstrdup(projname);
 
 	// attempt to get latest pushobj, if exists, if not, create empty file
 	if (init_projdir(pd)) {
@@ -957,7 +960,7 @@ int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po, int read_prev)
 	po->refs = (char**)xcalloc(list.nr, sizeof(char*));
 
 	for (ii = 0; ii < list.nr; ii++)
-		po->refs[ii] = xmemdupz(list.items[ii].string, strlen(list.items[ii].string));
+		po->refs[ii] = xstrdup(list.items[ii].string);
 
 	// rest of the stuff is signature
 	strbuf_add(&sig, buf.buf, buf.len);
@@ -1116,6 +1119,8 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
 	FILE * fd;
 	uint32_t len = 0;
 
+	flags |= SIGN;
+
 	if (!parse_url(url, &host, &port, &projname))
 		die("Error parsing url");
 
@@ -1149,6 +1154,11 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
 	
 	// now receive the pushobject
 	fd = fdopen(sock, "r");
+
+	if (!fd) {
+		perror("failed fdopen");
+		exit(1);
+	}
 
 	if (!force) {
 		if (gidit_read_pushobj(fd, &po, 1))
