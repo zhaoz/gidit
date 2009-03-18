@@ -326,7 +326,7 @@ static void strbuf_appendpushobj(struct strbuf * buf, struct gidit_pushobj *po, 
  */
 static int init_projdir(struct gidit_projdir * pd)
 {
-	int len = 0;
+	int len;
 	char * path = NULL;
 	FILE * fp;
 
@@ -337,9 +337,7 @@ static int init_projdir(struct gidit_projdir * pd)
 		return -1;
 
 	// first get the pgp stuff
-	len = strlen(pd->userdir) + 1 + 3;
-	path = (char *)xmalloc(len + 1);
-	path[len] = '\0';
+	path = (char *)xmalloc(strlen(pd->userdir) +1 + 3 + 1);
 	sprintf(path, "%s/PGP", pd->userdir);
 
 	fp = fopen(path, "r");
@@ -451,13 +449,10 @@ static int gen_pushobj(struct gidit_pushobj * po, const char *signingkey,
 struct gidit_projdir * new_projdir(const char * basepath, const char * sha1_hex, 
 		const char * projname)
 {
-	struct gidit_projdir  * pd = NULL;
-
-	pd = (struct gidit_projdir *)xmalloc(sizeof(struct gidit_projdir ));
+	struct gidit_projdir * pd = (struct gidit_projdir *)xmalloc(sizeof(struct gidit_projdir));
 
 	// Set basepath
-	pd->basepath = (char*)xmalloc(strlen(basepath) + 1);
-	strcpy(pd->basepath, basepath);
+	pd->basepath = xmemdupz(basepath, strlen(basepath));
 
 	// convert given sha1_hex, to binary sha1
 	get_sha1_hex(sha1_hex, pd->pgp_sha1);
@@ -471,8 +466,7 @@ struct gidit_projdir * new_projdir(const char * basepath, const char * sha1_hex,
 	pd->projdir = (char*)xmalloc(strlen(pd->userdir) + 1 + strlen(projname) + 1);
 	sprintf(pd->projdir, "%s/%s", pd->userdir, projname);
 
-	pd->projname = (char*)xmalloc(strlen(projname) + 1);
-	strcpy(pd->projname, projname);
+	pd->projname = xmemdupz(projname, strlen(projname));
 
 	// attempt to get latest pushobj, if exists, if not, create empty file
 	if (init_projdir(pd)) {
@@ -748,9 +742,8 @@ char * gidit_po_list(const char * basepath, const char * pgp_sha1, const char * 
 	int rc = 0;
 	struct strbuf po_list = STRBUF_INIT;
 	struct gidit_pushobj po = PO_INIT;
-	struct gidit_projdir  * pd;
+	struct gidit_projdir * pd = new_projdir(basepath, pgp_sha1, projname);
 
-	pd = new_projdir(basepath, pgp_sha1, projname);
 	if (!pd)
 		return NULL;
 	
@@ -772,9 +765,7 @@ char * gidit_po_list(const char * basepath, const char * pgp_sha1, const char * 
 
 	free_projdir(pd);
 
-	pobuf = (char*)xmalloc(po_list.len + 1);
-	strcpy(pobuf, po_list.buf);
-	pobuf[po_list.len] = '\0';
+	pobuf = xmemdupz(po_list.buf, po_list.len);
 
 	strbuf_release(&po_list);
 
