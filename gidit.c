@@ -275,14 +275,14 @@ void free_projdir(struct gidit_projdir* pd)
 	free(pd);
 }
 
-static int read_ack(int fd)
+static char read_ack(int fd)
 {
-	int status;
+	char status;
 	char ch;
 	struct strbuf msg = STRBUF_INIT;
 
 	// receive the ack
-	if (read(fd, &status, 1) != 1)
+	if (read(fd, &status, sizeof(char)) != 1)
 		die("error reading ack");
 
 	while (read(fd, &ch, sizeof(char)) == 1) {
@@ -1118,7 +1118,7 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
 	strbuf_release(&msg);
 
 	if (read_ack(sock) != 0)
-		die("Push failed");
+		die("Push failed early");
 	
 	// now receive the pushobject
 	fd = fdopen(sock, "r");
