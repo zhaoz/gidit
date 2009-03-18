@@ -193,7 +193,7 @@ static int resolve_one_ref(const char *path, const unsigned char *sha1,
 		return 0;
 	
 
-	cbuf = (char*)malloc(40 + 1 + strlen(path) + 1);
+	cbuf = (char*)xmalloc(40 + 1 + strlen(path) + 1);
 	sprintf(cbuf, "%s %s", sha1_to_hex(sha1), path);
 	string_list_append(cbuf, cb->list);
 
@@ -337,7 +337,7 @@ static int init_projdir(struct gidit_projdir * pd)
 		return -1;
 
 	// first get the pgp stuff
-	path = (char *)malloc(strlen(pd->userdir) + 1 + 3);
+	path = (char *)xmalloc(strlen(pd->userdir) + 1 + 3);
 	sprintf(path, "%s/PGP", pd->userdir);
 
 	fp = fopen(path, "r");
@@ -350,7 +350,7 @@ static int init_projdir(struct gidit_projdir * pd)
 	fseek(fp, 0, SEEK_END);
 	pd->pgp_len = ftell(fp);
 	fseek(fp, 0, SEEK_SET);
-	pd->pgp = (unsigned char*)malloc(pd->pgp_len);
+	pd->pgp = (unsigned char*)xmalloc(pd->pgp_len);
 	len = fread(pd->pgp, pd->pgp_len, 1, fp);
 	fclose(fp);
 
@@ -360,7 +360,7 @@ static int init_projdir(struct gidit_projdir * pd)
 	if (access(pd->userdir, W_OK|R_OK|X_OK) != 0)
 		return error("Unknown user/pgp key, please initialize user first\n");
 
-	path = (char*)malloc(strlen(pd->projdir) + 1 + 4 + 1);
+	path = (char*)xmalloc(strlen(pd->projdir) + 1 + 4 + 1);
 	sprintf(path, "%s/HEAD", pd->projdir);
 
 	if (access(path, F_OK) == 0) {
@@ -422,17 +422,17 @@ static int gen_pushobj(struct gidit_pushobj * po, const char *signingkey,
 	for_each_ref(resolve_one_ref, &cbdata);
 
 	po->lines = list.nr;
-	po->refs = (char**)malloc(sizeof(char*) * list.nr);
+	po->refs = (char**)xmalloc(sizeof(char*) * list.nr);
 
 	for (ii = 0; ii < list.nr; ii++) {
-		po->refs[ii] = (char*)malloc(strlen(list.items[ii].string) + 1);
+		po->refs[ii] = (char*)xmalloc(strlen(list.items[ii].string) + 1);
 		strcpy(po->refs[ii], list.items[ii].string);
 	}
 
 	if (flags & SIGN)
 		do_sign(&sig, &buf, signingkey);
 	
-	po->signature = (char*)malloc(sig.len);
+	po->signature = (char*)xmalloc(sig.len);
 	strncpy(po->signature, sig.buf, sig.len);
 
 	string_list_clear(&list, 0);
@@ -452,26 +452,26 @@ struct gidit_projdir * new_projdir(const char * basepath, const char * sha1_hex,
 	ssize_t bd_size;
 	struct gidit_projdir  * pd = NULL;
 
-	pd = (struct gidit_projdir *)malloc(sizeof(struct gidit_projdir ));
+	pd = (struct gidit_projdir *)xmalloc(sizeof(struct gidit_projdir ));
 	bd_size = strlen(basepath) + 1; 
 
 	// Set basepath
-	pd->basepath = (char*)malloc(bd_size);
+	pd->basepath = (char*)xmalloc(bd_size);
 	memcpy(pd->basepath, basepath, bd_size);
 
 	// convert given sha1_hex, to binary sha1
 	get_sha1_hex(sha1_hex, pd->pgp_sha1);
 
 	// set the users dir (sha1)
-	pd->userdir = (char*)malloc(strlen(basepath) + 1 + strlen(PUSHOBJ_DIR) + 1
+	pd->userdir = (char*)xmalloc(strlen(basepath) + 1 + strlen(PUSHOBJ_DIR) + 1
 								+ 40 + 1);
 	sprintf(pd->userdir, "%s/%s/%s", basepath, PUSHOBJ_DIR, sha1_hex);
 
 	// set the project directory inside userdir
-	pd->projdir = (char*)malloc(strlen(pd->userdir) + strlen(projname) + 1);
+	pd->projdir = (char*)xmalloc(strlen(pd->userdir) + strlen(projname) + 1);
 	sprintf(pd->projdir, "%s/%s", pd->userdir, projname);
 
-	pd->projname = (char*)malloc(strlen(projname) + 1);
+	pd->projname = (char*)xmalloc(strlen(projname) + 1);
 	strcpy(pd->projname, projname);
 
 	// attempt to get latest pushobj, if exists, if not, create empty file
@@ -491,7 +491,7 @@ static void update_proj_head(struct gidit_projdir * pd, const char * sha1)
 	FILE * head_fp;
 	char * head_path = NULL;
 
-	head_path = (char*)malloc(strlen(pd->projdir) + 1 + 4 + 1);
+	head_path = (char*)xmalloc(strlen(pd->projdir) + 1 + 4 + 1);
 	sprintf(head_path, "%s/HEAD", pd->projdir);
 
 	head_fp = fopen(head_path, "w");
@@ -530,7 +530,7 @@ static int pushobj_add_to_list(struct gidit_projdir *pd, struct gidit_pushobj *p
 
 	pushobj_to_sha1(sha1, po);
 
-	file_path = (char*)malloc(strlen(pd->projdir) + 40 + 1);
+	file_path = (char*)xmalloc(strlen(pd->projdir) + 40 + 1);
 	strcpy(sha1_hex, sha1_to_hex(sha1));
 	sprintf(file_path, "%s/%s", pd->projdir, sha1_hex);
 
@@ -560,7 +560,7 @@ static int sha1_to_pushobj(struct gidit_pushobj *po, const struct gidit_projdir 
 	if (strncmp(sha1, END_SHA1, 40) == 0)
 		return error("Invalid sha1");
 
-	path = malloc(strlen(pd->projdir) + 1 + 40 + 1);
+	path = xmalloc(strlen(pd->projdir) + 1 + 40 + 1);
 	sprintf(path, "%s/%s", pd->projdir, sha1);
 
 	fp = fopen(path, "r");
@@ -772,7 +772,7 @@ char * gidit_po_list(const char * basepath, const char * pgp_sha1, const char * 
 
 	free_projdir(pd);
 
-	pobuf = (char*)malloc(po_list.len + 1);
+	pobuf = (char*)xmalloc(po_list.len + 1);
 	strcpy(pobuf, po_list.buf);
 	pobuf[po_list.len] = '\0';
 
@@ -924,7 +924,7 @@ int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po)
 			continue;
 		}
 
-		cbuf = (char*)malloc(buf.len);
+		cbuf = (char*)xmalloc(buf.len);
 		strcpy(cbuf, buf.buf);
 		string_list_append(cbuf, &list);
 	}
@@ -933,10 +933,10 @@ int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po)
 		die("pushobject did not contain HEAD ref");
 	
 	po->lines = list.nr;
-	po->refs = (char**)malloc(sizeof(char*) * list.nr);
+	po->refs = (char**)xmalloc(sizeof(char*) * list.nr);
 
 	for (ii = 0; ii < list.nr; ii++) {
-		po->refs[ii] = (char*)malloc(strlen(list.items[ii].string) + 1);
+		po->refs[ii] = (char*)xmalloc(strlen(list.items[ii].string) + 1);
 		strcpy(po->refs[ii], list.items[ii].string);
 	}
 
@@ -949,7 +949,7 @@ int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po)
 		if (strncmp(buf.buf, END_PGP_SIGNATURE, strlen(END_PGP_SIGNATURE)) == 0)
 			break;
 	}
-	po->signature = (char*)malloc(sig.len);
+	po->signature = (char*)xmalloc(sig.len);
 	strcpy(po->signature, sig.buf);
 
 	memset(po->prev, 0, 40);
@@ -1035,7 +1035,7 @@ static int parse_url(const char *url, char ** host, int * port,
 		if (size < 1)
 			return 0;
 
-		*host = (char*)malloc(size + 1);
+		*host = (char*)xmalloc(size + 1);
 		strncpy(*host, url, size);
 		(*host)[size] = '\0';
 
@@ -1045,7 +1045,7 @@ static int parse_url(const char *url, char ** host, int * port,
 			return 0;
 
 		// rest is port number
-		port_c = (char*)malloc(size + 1);
+		port_c = (char*)xmalloc(size + 1);
 		strncpy(port_c, url, size);
 		*port = atoi(port_c);
 		free(port_c);
@@ -1057,7 +1057,7 @@ static int parse_url(const char *url, char ** host, int * port,
 	pt = strchr(url, ':');
 
 	if (pt) {
-		*projname = (char*)malloc(pt - url + 1);
+		*projname = (char*)xmalloc(pt - url + 1);
 		strncpy(*projname, url, pt-url);
 		(*projname)[pt-url] = '\0';
 		pt++;
@@ -1069,7 +1069,7 @@ static int parse_url(const char *url, char ** host, int * port,
 	} else {
 		// signingkey is the default one
 		
-		*projname = (char*)malloc(strlen(url) + 1);
+		*projname = (char*)xmalloc(strlen(url) + 1);
 		strcpy(*projname, url);
 
 		set_default_signingkey();
@@ -1246,7 +1246,7 @@ const char * str_to_pushobj(const char *buf, struct gidit_pushobj * po)
 		}
 
 		size = pt - buf;
-		cbuf = (char*)malloc(size + 1);
+		cbuf = (char*)xmalloc(size + 1);
 		strncpy(cbuf, buf, size);
 		cbuf[size] = '\0';
 		string_list_append(cbuf, &list);
@@ -1260,11 +1260,11 @@ const char * str_to_pushobj(const char *buf, struct gidit_pushobj * po)
 	}
 	
 	po->lines = list.nr;
-	po->refs = (char**)malloc(sizeof(char*) * list.nr);
+	po->refs = (char**)xmalloc(sizeof(char*) * list.nr);
 
 	// copy string list over to the pushobject
 	for (ii = 0; ii < list.nr; ii++) {
-		po->refs[ii] = (char*)malloc(strlen(list.items[ii].string) + 1);
+		po->refs[ii] = (char*)xmalloc(strlen(list.items[ii].string) + 1);
 		strcpy(po->refs[ii], list.items[ii].string);
 	}
 
@@ -1277,7 +1277,7 @@ const char * str_to_pushobj(const char *buf, struct gidit_pushobj * po)
 			break;
 	} while ((pt = strchr(buf, '\n')) != NULL);
 
-	po->signature = (char*)malloc(sig.len);
+	po->signature = (char*)xmalloc(sig.len);
 	strcpy(po->signature, sig.buf);
 
 	memset(po->prev, 0, 40);
@@ -1302,7 +1302,7 @@ int str_to_polist(const char * buf, struct gidit_pushobj ***polist)
 			*polist = xrealloc(*polist, sizeof(struct gidit_pushobj *) * size);
 		}
 
-		struct gidit_pushobj * po = (struct gidit_pushobj *)malloc(sizeof(struct gidit_pushobj));
+		struct gidit_pushobj * po = (struct gidit_pushobj *)xmalloc(sizeof(struct gidit_pushobj));
 
 		pt = str_to_pushobj(pt, po);
 

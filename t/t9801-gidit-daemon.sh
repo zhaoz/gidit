@@ -57,7 +57,7 @@ test_expect_success 'generate pushobject should succeed' '
 '
 
 test_expect_failure 'forced gidit push should work' '
-	git gidit --push -f &&
+	git gidit --push -f -p hello &&
 	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/PGP  && 
 	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME 
 '
