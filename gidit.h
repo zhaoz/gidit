@@ -69,6 +69,11 @@ struct gidit_projdir * new_projdir(const char * basepath, const char * sha1_hex,
 void free_projdir(struct gidit_projdir* pd);
 
 /**
+ * stringify a pushobject, if sig is 0, skips signature
+ */
+void strbuf_appendpushobj(struct strbuf * buf, struct gidit_pushobj *po, int sig);
+
+/**
  * Generate a pushobj, which is a list of all refs including HEAD, and
  * excluding stashes and remotes
  */

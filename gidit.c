@@ -310,7 +310,7 @@ static void print_pushobj(FILE * fp, struct gidit_pushobj *po)
 	fprintf(fp, "%s", po->signature);
 }
 
-static void strbuf_appendpushobj(struct strbuf * buf, struct gidit_pushobj *po, int sig)
+void strbuf_appendpushobj(struct strbuf * buf, struct gidit_pushobj *po, int sig)
 {
 	int ii;
 	strbuf_addf(buf, "%s HEAD\n", po->head);
