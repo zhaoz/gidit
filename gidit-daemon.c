@@ -288,7 +288,7 @@ static int dht_push(char force, char *project_name, uint32_t pgp_key_len, char *
 	
 	
 
-	if (push_returned == 1 && !force)
+	if (push_returned == 1)
 		*push_obj = gidit_po_list(base_path, sha1_to_hex(sha1), project_name);
 
 	free(message);
