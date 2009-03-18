@@ -46,6 +46,7 @@ typedef struct push_m {
 } push_message;
 
 typedef struct return_m {
+	char force;
 	uint32_t pid;
 	uint32_t return_val;
 	unsigned char pgp[20];

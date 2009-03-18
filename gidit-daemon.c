@@ -161,10 +161,10 @@ static void dht_del (Key * k, Message * m)
 		push_obj = gidit_po_list(base_path, sha1_to_hex(sha1), proj_name);
 
 		if (!push_obj) {
+			rmessage = (return_message*) malloc (sizeof(return_message));
 			rmessage->return_val = htonl(1);
 			if(message->force)
 				rmessage->return_val = htonl(0);
-			rmessage = (return_message*) malloc (sizeof(return_message));
 		} else {
 			return_size = strlen(push_obj) + 1;
 			rmessage = (return_message*) malloc (sizeof(return_message) + return_size + message->name_len);
@@ -176,6 +176,7 @@ static void dht_del (Key * k, Message * m)
 			return_size += ntohl(message->name_len);
 			free(push_obj);
 		}
+		rmessage->force = message->force;
 		rmessage->pid = message->pid; //Might as well stay in network-order
 
 		chimera_send(chimera_state, message->source, RETURN_PUSH, sizeof(return_message)+return_size, (char*)rmessage);
@@ -183,28 +184,33 @@ static void dht_del (Key * k, Message * m)
 		return_message * message;
 		message = (return_message *)m->payload;
 
-		if (ntohl(message->return_val) == 1)	//Tell the handler that there is no push_obj, go home
-			kill(ntohl(message->pid), SIGUSR2);
-		if (ntohl(message->return_val) == 0) {
-			//Parse the payload
-			char * proj_name = message->buf;
-			int proj_name_len = strlen(message->buf) + 1;
-			char * po_list = message->buf + proj_name_len;
-			//Make a projdir
-			struct gidit_projdir *proj_dir = new_projdir(base_path, sha1_to_hex(message->pgp),proj_name);
+		if(message->force){
+			if(ntohl(message->return_val))
+				kill(ntohl(message->pid),SIGUSR2);
+			else
+				kill(ntohl(message->pid),SIGUSR1);
 
-			//Turn char *po list to num_po and **polist
-			int num_po = 0;
-			struct gidit_pushobj **polist = NULL;
-			num_po = str_to_polist(po_list, &polist);
-			//Save the push_obj in the appropriate place
-			if (gidit_update_pushobj_list(proj_dir, num_po, polist)) {
-				//Failure
-				logerror("gidit_update_pushobj_list failed");
+		}else{
+			if (ntohl(message->return_val))	//Tell the handler that there is no push_obj, go home
 				kill(ntohl(message->pid), SIGUSR2);
-			} else {
-				//Tell the handler I'm done.
-				kill(ntohl(message->pid), SIGUSR1);
+			if (ntohl(message->return_val) == 0) {
+				//Parse the payload
+				char * proj_name = message->buf;
+				int proj_name_len = strlen(message->buf) + 1;
+				char * po_list = message->buf + proj_name_len;
+				//Make a projdir
+				struct gidit_projdir *proj_dir = new_projdir(base_path, sha1_to_hex(message->pgp),proj_name);
+
+				//Turn char *po list to num_po and **polist
+				int num_po = 0;
+				struct gidit_pushobj **polist = NULL;
+				num_po = str_to_polist(po_list, &polist);
+				//Save the push_obj in the appropriate place
+				if (gidit_update_pushobj_list(proj_dir, num_po, polist)) {
+					//Failure
+					logerror("gidit_update_pushobj_list failed");
+					kill(ntohl(message->pid), SIGUSR2);
+				}
 			}
 		}
 	}
