@@ -12,7 +12,7 @@ Tests for daemon operations with gidit.'
 export GIDIT_DIR="$TEST_DIRECTORY/gidit_test_dir"
 export PROJ_NAME="test"
 
-test -e $GIDIT_DIR && rm -r $GIDIT_DIR
+test -e $GIDIT_DIR && rm -rf $GIDIT_DIR
 
 # some commits to start it off
 echo "stuff" > tmp
@@ -57,10 +57,22 @@ test_expect_success 'generate pushobject should succeed' '
 '
 
 test_expect_success 'forced gidit push should work' '
-	git gidit --push --force -p $PROJ_NAME &&
+	git gidit --push --force -p $PROJ_NAME 2> ../log
+'
+
+test_expect_success 'files should have been created' '
 	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/PGP && 
 	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME &&
 	test `find $GIDIT_DIR/bundles/ -type f | wc -l` -eq 2
+'
+
+# make some changes
+echo "stuff" >> tmp2
+git add tmp2
+git commit -q -m "added tmp"
+
+test_expect_failure 'second gidit push should work' '
+	git gidit --push -p $PROJ_NAME
 '
 
 
