@@ -145,9 +145,9 @@ static void dht_del (Key * k, Message * m)
 		int return_size = 0;
 		git_SHA_CTX c;
 
-		logerror("RECEIVED PUSH:\n\tPID:%d\n\tPROJ:%s",ntohl(message->pid),proj_name);
+		logerror("RECEIVED %s:\n\tPID:%d\n\tPROJ:%s", message->force ? "PUSHF" : "PUSH", ntohl(message->pid),proj_name);
 
-		if(message->force){
+		if (message->force) {
 			if(gidit_proj_init(base_path, ntohl(message->pgp_len), pgp, proj_name, 0))
 				die("Error initializing project");
 			rmessage = (return_message*) malloc (sizeof(return_message));
@@ -192,13 +192,13 @@ static void dht_del (Key * k, Message * m)
 
 		logerror("RECEIVED RETURN");
 
-		if(message->force){
+		if (message->force) {
 			if(ntohl(message->return_val))
 				kill(ntohl(message->pid),SIGUSR2);
 			else
 				kill(ntohl(message->pid),SIGUSR1);
 
-		}else{
+		} else {
 			if (ntohl(message->return_val))	//Tell the handler that there is no push_obj, go home
 				kill(ntohl(message->pid), SIGUSR2);
 			if (ntohl(message->return_val) == 0) {
