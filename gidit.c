@@ -496,7 +496,7 @@ static void update_proj_head(struct gidit_projdir * pd, const char * sha1)
 	free(head_path);
 }
 
-static void pushobj_to_sha1(unsigned char * sha1, struct gidit_pushobj *po)
+void pushobj_to_sha1(unsigned char * sha1, struct gidit_pushobj *po)
 {
 	struct strbuf buf = STRBUF_INIT;
 	git_SHA_CTX c;
@@ -1240,6 +1240,21 @@ int gidit_update_pushobj_list(struct gidit_projdir * pd, int num_po, struct gidi
 }
 
 /**
+ * Look through a pushobject list, and return last known 
+ * @returns offset for known, -1 if none are known
+ */
+static int latest_known_pushobj(int num_po, struct gidit_pushobj ** polist)
+{
+	int ii;
+
+	for (ii = 0; ii < num_po; ++ii)
+		if (!verify_pushobj(polist[ii]))
+			return ii;
+
+	return -1;
+}
+
+/**
  * Look through a pushobject list, and verify that all refs are known
  * @returns 0 if all known, 1 if there are unknown
  */
@@ -1312,6 +1327,31 @@ int gidit_verify_pushobj_list(FILE * fp)
 	free(polist);
 
 	return rc;
+}
+
+int gidit_missing_pushobjs(FILE *fp)
+{
+	unsigned char sha1[20];
+	int nr = 0;
+	int ii;
+	int last_known = -1;
+	struct gidit_pushobj ** polist = NULL;
+
+	nr = read_pushobj_list(fp, &polist);
+
+	last_known = latest_known_pushobj(nr, polist);
+
+	if (last_known == -1)
+		ii = nr;
+	else
+		ii = last_known;
+
+	for (ii--; ii >= 0; --ii) {
+		pushobj_to_sha1(sha1, polist[ii]);
+		printf("%s\n", sha1_to_hex(sha1));
+	}
+
+	return 0;
 }
 
 const char * str_to_pushobj(const char *buf, struct gidit_pushobj * po)

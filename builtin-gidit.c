@@ -57,7 +57,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 	int flags = 0;
 	int init = 0, verbose = 0, pushobj = 0, updatepl = 0, sign = 0,
 		proj_init = 0, polist = 0, store_bundle = 0, get_bundle = 0, pobj_val = 0,
-		create_bundle = 0, push = 0, verify_polist = 0 ;
+		create_bundle = 0, push = 0, verify_polist = 0, list_missing = 0;
 
 	const char *basepath = NULL;
 	const char *keyid = NULL;
@@ -82,6 +82,7 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		OPT_STRING('p',NULL, &projname, "project-name", "Project name"),
 		OPT_BOOLEAN( 0 , "verify-pobj", &pobj_val, "validate a given pushobject"),
 		OPT_BOOLEAN( 0 , "verify-polist", &verify_polist, "verify given polist as all known"),
+		OPT_BOOLEAN( 0 , "list-missing", &list_missing, "List sha1's of missing pushobjs"),
 		OPT_BOOLEAN( 0 , "push", &push, "Do a push over gidit"),
 		OPT_BOOLEAN( 0 , "create-bundle", &create_bundle, 
 					"validate a given pushobject"),
@@ -124,6 +125,8 @@ int cmd_gidit(int argc, const char **argv, const char *prefix)
 		return !!gidit_gen_bundle(stdin, flags);
 	else if (verify_polist)
 		return !!gidit_verify_pushobj_list(stdin);
+	else if (list_missing)
+		return !!gidit_missing_pushobjs(stdin);
 	else if (push) {
 		url = (char*)malloc(strlen("gidit://127.0.0.1:9418/") + 
 				strlen(projname) + 1 + strlen(signingkey) + 1);

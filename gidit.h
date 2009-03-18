@@ -150,9 +150,14 @@ int gidit_read_pushobj(FILE * fp, struct gidit_pushobj *po, int read_prev);
 int gidit_update_pushobj_list(struct gidit_projdir * pd, int num_po, struct gidit_pushobj ** polist);
 
 /**
- * Given a push object list in stdin, verify that all refs are known
+ * Given a push object list, verify that all refs are known
  */
 int gidit_verify_pushobj_list(FILE * fp);
+
+/**
+ * given a pushobject list, find the latest known one, and print out all sha1's for pushobj with unknown refs
+ */
+int gidit_missing_pushobjs(FILE *fp);
 
 /**
  * Given a buffer containing a pushobj, construct po, and return pointer in buf after pushobj
@@ -165,5 +170,10 @@ const char * str_to_pushobj(const char *buf, struct gidit_pushobj * po);
  * return the number created
  */
 int str_to_polist(const char * buf, struct gidit_pushobj ***polist);
+
+/**
+ * given a pushobj, figure out the sha1 for it
+ */
+void pushobj_to_sha1(unsigned char * sha1, struct gidit_pushobj *po);
 
 #endif		// GIDIT_H

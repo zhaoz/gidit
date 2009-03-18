@@ -140,7 +140,9 @@ test_expect_success 'verify pushobject should work' '
 '
 
 test_expect_code 1 'verify pushobject with bad ref should fail' '
-	(echo "000000000AB1F000000000000000000000000000 fake" && cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD`) | git gidit --verify-pobj 
+	(echo "000000000AB1F000000000000000000000000000 fake" &&
+			cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/`cat $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME/HEAD`) |
+		git gidit --verify-pobj 
 '
 
 test_expect_success 'second pobj creation should work' '
@@ -166,6 +168,15 @@ test_expect_success 'bundle gen from pushobjects should succeed' '
 
 test_expect_success 'verify pushobj list should succeed' '
 	(echo -n "$PGP_SHA1$PROJ_NAME") | git gidit --polist -b $GIDIT_DIR | git gidit --verify-polist 
+'
+
+export POBJ_SHA1=`head -4 $TEST_DIRECTORY/t9800/pushobj | sha1sum | head -c 40`
+
+test_expect_success 'get missing bundles should work' '
+	(echo -n $PGP_SHA1 && echo $PROJ_NAME && cat $TEST_DIRECTORY/t9800/pushobj) |
+			git gidit --updatepl -b $GIDIT_DIR &&
+	test `(echo -n "$PGP_SHA1$PROJ_NAME") | git gidit --polist -b $GIDIT_DIR |
+			git gidit --list-missing | grep $POBJ_SHA1 | wc -l` -eq 1
 '
 
 # clean up
