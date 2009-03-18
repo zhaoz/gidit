@@ -103,8 +103,9 @@ static void NORETURN daemon_die(const char *err, va_list params)
 }
 
 //GIDIT-UPCALLS
-#define SEND_PUSH 15
-#define RETURN_PUSH 16
+#define GET_PO_LIST 15
+#define RETURN_PO_LIST 16
+
 static ChimeraState * chimera_state;
 volatile sig_atomic_t push_returned = 0;
 
@@ -118,24 +119,11 @@ void signal_two(int sig){
 
 static void dht_fwd (Key ** kp, Message ** mp, ChimeraHost ** hp)
 {
-	/*Key *k = *kp;
-	Message *m = *mp;
-	chat_message message;
-	message = *((chat_message *)m->payload);
-
-	if (m->type == TEST_CHAT) {
-		logerror("Routing TEST ((%s)%u:%s) To %s\n",message.message,message.pid,get_key_string(&(message.source)),get_key_string(k));
-		//chimera_send(chimera_state, message.source, RETURN_CHAT, sizeof(message), (char*)&message);
-	}if (m->type == RETURN_CHAT){
-		logerror("Routing RETURN ((%s)%u:%s) To %s\n",message.message,message.pid,get_key_string(&(message.source)),get_key_string(k));
-		//logerror("Routing RETURN (%s) to %u:%s\n",message.message,message.pid,get_key_string(&(message.source)));
-		//chimera_send(chimera_state, *k, RETURN_CHAT, sizeof(message), (char*)&message);
-	}*/
 }
 
 static void dht_del (Key * k, Message * m)
 {
-	if (m->type == SEND_PUSH) {
+	if (m->type == GET_PO_LIST) {
 		unsigned char sha1[20];
 		push_message * message = (push_message *) m->payload;
 		char * proj_name = message->buf;
@@ -150,13 +138,6 @@ static void dht_del (Key * k, Message * m)
 		if (message->force) {
 			if(gidit_proj_init(base_path, ntohl(message->pgp_len), pgp, proj_name, 0))
 				die("Error initializing project");
-			rmessage = (return_message*) malloc (sizeof(return_message));
-			rmessage->return_val = htonl(0);
-			rmessage->force = message->force;
-			rmessage->pid = message->pid; //Might as well stay in network-order
-
-			chimera_send(chimera_state, message->source, RETURN_PUSH, sizeof(return_message), (char*)rmessage);
-			return;
 		}
 
 		git_SHA1_Init(&c);
@@ -185,42 +166,38 @@ static void dht_del (Key * k, Message * m)
 		rmessage->force = message->force;
 		rmessage->pid = message->pid; //Might as well stay in network-order
 
-		chimera_send(chimera_state, message->source, RETURN_PUSH, sizeof(return_message)+return_size, (char*)rmessage);
-	} else if (m->type == RETURN_PUSH) {
+		chimera_send(chimera_state, message->source, RETURN_PO_LIST, sizeof(return_message)+return_size, (char*)rmessage);
+	} else if (m->type == RETURN_PO_LIST) {
 		return_message * message;
 		message = (return_message *)m->payload;
 
 		logerror("RECEIVED RETURN");
 
-		if (message->force) {
-			if(ntohl(message->return_val))
-				kill(ntohl(message->pid),SIGUSR2);
+		if (ntohl(message->return_val)){	//Tell the handler that there is no push_obj, go home
+			if(message->force)
+				kill(ntohl(message->pid), SIGUSR1);
 			else
-				kill(ntohl(message->pid),SIGUSR1);
-
-		} else {
-			if (ntohl(message->return_val))	//Tell the handler that there is no push_obj, go home
 				kill(ntohl(message->pid), SIGUSR2);
-			if (ntohl(message->return_val) == 0) {
-				//Parse the payload
-				char * proj_name = message->buf;
-				int proj_name_len = strlen(message->buf) + 1;
-				char * po_list = message->buf + proj_name_len;
-				//Make a projdir
-				struct gidit_projdir *proj_dir = new_projdir(base_path, sha1_to_hex(message->pgp),proj_name);
-
-				//Turn char *po list to num_po and **polist
-				int num_po = 0;
-				struct gidit_pushobj **polist = NULL;
-				num_po = str_to_polist(po_list, &polist);
-				//Save the push_obj in the appropriate place
-				if (gidit_update_pushobj_list(proj_dir, num_po, polist)) {
-					//Failure
-					logerror("gidit_update_pushobj_list failed");
-					kill(ntohl(message->pid), SIGUSR2);
-				}
-			}
+			return;
 		}
+		//Parse the payload
+		char * proj_name = message->buf;
+		int proj_name_len = strlen(message->buf) + 1;
+		char * po_list = message->buf + proj_name_len;
+		//Make a projdir
+		struct gidit_projdir *proj_dir = new_projdir(base_path, sha1_to_hex(message->pgp),proj_name);
+		//Turn char *po list to num_po and **polist
+		int num_po = 0;
+		struct gidit_pushobj **polist = NULL;
+		num_po = str_to_polist(po_list, &polist);
+		//Save the push_obj in the appropriate place
+		if (gidit_update_pushobj_list(proj_dir, num_po, polist)) {
+			//Failure
+			logerror("gidit_update_pushobj_list failed");
+			kill(ntohl(message->pid), SIGUSR2);
+		}
+		//We made it!
+		kill(ntohl(message->pid), SIGUSR1);
 	}
 }
 
@@ -270,8 +247,8 @@ static void gidit_daemon_init(char * bootstrap_addr, int bootstrap_port, int loc
 	chimera_deliver (chimera_state, dht_del);
 	chimera_update (chimera_state, dht_update);
 	chimera_setkey (chimera_state, key);
-	chimera_register (chimera_state, SEND_PUSH, 1);
-	chimera_register (chimera_state, RETURN_PUSH, 1);
+	chimera_register (chimera_state, GET_PO_LIST, 1);
+	chimera_register (chimera_state, RETURN_PO_LIST, 1);
 	chimera_join(chimera_state, host);
 }
 
@@ -304,7 +281,7 @@ static int dht_push(char force, char *project_name, uint32_t pgp_key_len, char *
 
 	logerror("Return key %s",message->source.keystr);
 
-	chimera_send (chimera_state, chimera_key, SEND_PUSH, sizeof(push_message) + name_length + pgp_key_len, (char*)message);
+	chimera_send (chimera_state, chimera_key, GET_PO_LIST, sizeof(push_message) + name_length + pgp_key_len, (char*)message);
 
 	while (!push_returned)
 		sleep(1);
@@ -335,6 +312,18 @@ static void safe_read(int fd, void *buffer, unsigned size)
 		die("The remote end hung up unexpectedly");
 }
 
+
+static int dht_push_po()
+{
+	
+	return 0;
+}
+
+static int dht_push_bundle()
+{
+
+	return 0;
+}
 static int execute(struct sockaddr *addr)
 {
 	char flag;
@@ -373,7 +362,7 @@ static int execute(struct sockaddr *addr)
 	char *pgp_key = NULL;
 	char *push_obj = NULL;
 	struct strbuf project_name = STRBUF_INIT;
-	uint32_t pgp_len;
+	uint32_t pgp_len, bundle_len;
 	char ret;
 	switch ((int)flag) {
 		case GIDIT_PUSHF_MSG:
@@ -388,6 +377,7 @@ static int execute(struct sockaddr *addr)
 			safe_read(0, pgp_key, pgp_len);
 
 			strbuf_getline(&project_name, stdin, '\0');
+
 			ret = dht_push(force_push, project_name.buf, pgp_len, pgp_key, &push_obj);
 
 			if (ret == -1) {
@@ -412,7 +402,35 @@ static int execute(struct sockaddr *addr)
 					if (write(0, push_obj, strlen(push_obj)+1) != strlen(push_obj) +1)
 						die("Error talking to client");
 				}
+				FILE * fd;
+				fd = fdopen(0, "r");
+
+				if(!fd){
+					logerror("Client closed connection (I think)");
+					break;
+				}
+				struct gidit_pushobj po = PO_INIT;
+				char * bundle;
+
+				if(gidit_read_pushobj(fd, &po))
+					die("Error reading push object");
+
+				safe_read(0, &bundle_len, sizeof(uint32_t));
+				bundle_len = ntohl(bundle_len);
+
+				bundle = (char*) malloc (bundle_len);	
+				safe_read(0, bundle, bundle_len);
+
+				if(dht_push_po())
+					die("Error sending push object");
+
+				if(dht_push_bundle())
+					die("Error sending bundle");
+
+				free(bundle);
 			}
+
+			free(pgp_key);
 			break;
 		default:
 			die("Invalid input flag %d",(int)flag);
