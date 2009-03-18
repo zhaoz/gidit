@@ -180,7 +180,7 @@ test_expect_success 'get missing bundles should work' '
 '
 
 test_expect_success 'test temp' '
-	cat $TEST_DIRECTORY/t9800/pushobj | git gidit --test 2> ../log
+	cat $TEST_DIRECTORY/t9800/pushobj | git gidit --test 
 '
 
 # clean up

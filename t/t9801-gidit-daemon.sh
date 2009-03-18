@@ -56,10 +56,11 @@ test_expect_success 'generate pushobject should succeed' '
 	git gidit --pushobj -s > pobj1
 '
 
-test_expect_failure 'forced gidit push should work' '
-	git gidit --push -f -p hello &&
-	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/PGP  && 
-	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME 
+test_expect_success 'forced gidit push should work' '
+	git gidit --push --force -p $PROJ_NAME &&
+	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/PGP && 
+	test -e $GIDIT_DIR/pushobjects/$PGP_SHA1/$PROJ_NAME &&
+	test `find $GIDIT_DIR/bundles/ -type f | wc -l` -eq 2
 '
 
 

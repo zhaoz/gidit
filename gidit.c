@@ -435,8 +435,6 @@ static int gen_pushobj(struct gidit_pushobj * po, const char *signingkey,
 		strcpy(po->refs[ii], list.items[ii].string);
 	}
 
-	fprintf(stderr, "in gen_pushojb\n");
-
 	if (flags & SIGN)
 		do_sign(&sig, &buf, signingkey);
 	
@@ -819,7 +817,7 @@ int gidit_store_bundle(const char * basepath, const char * start_sha1,
 	char * cwd = getcwd(NULL, 0);
 
 	if (!enter_bundle_dir(basepath, start_sha1, end_sha1))
-		return error("Failed to enter gidit pushobj dir");
+		return error("Failed to enter gidit bundle dir");
 
 	git_SHA1_Init(&c);
 	git_SHA1_Update(&c, bundle, bundle_len);
@@ -837,7 +835,6 @@ int gidit_store_bundle(const char * basepath, const char * start_sha1,
 		return error("Error while writing bundle");
 	}
 
-	
 	// create BUNDLE file pointing to sha1
 	out = fopen("BUNDLES", "a");
 
@@ -1042,8 +1039,6 @@ static int parse_url(const char *url, char ** host, int * port,
 	int size = 0;
 	url = pt;
 
-	fprintf(stderr, "url is: %s\n", url);
-
 	if (*pt == '/') {	// use default localhost and 9418
 		*host = "localhost";
 		*port = 9418;
@@ -1177,7 +1172,6 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
 	if (!gen_pushobj(&po_new, signingkey, flags))
 		die("Failed to generate new pushobject");
 
-	
 	// send the bundle and the new pobj off
 	print_pushobj(fd, &po_new);
 
@@ -1185,13 +1179,14 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
 	if (gen_bundle(&msg, force ? NULL : po.head, po_new.head))
 		die("Failed to generate bundle");
 
-	fprintf(stderr, "bundle size is: %d\n", msg.len);
 	len = htonl(msg.len);
 	if (xwrite(sock, &len, sizeof(uint32_t)) != sizeof(uint32_t))
 		die("Failed to send bundlesize ");
-
-	if (write_in_full(sock, msg.buf, msg.len) != msg.len)
+	
+	if (write_in_full(sock, msg.buf, msg.len) != msg.len) {
+		perror("error in writing");
 		die("Failed to send bundle ");
+	}
 
 	pushobj_release(&po_new);
 	strbuf_release(&msg);
@@ -1199,6 +1194,8 @@ int gidit_push(const char * url, int refspec_nr, const char ** refspec,
 
 	if (read_ack(sock) != 0)
 		die("Push failed");
+	
+	printf("Push successful\n");
 
 	fclose(fd);
 
@@ -1333,8 +1330,6 @@ int gidit_verify_pushobj_list(FILE * fp)
 
 	nr = read_pushobj_list(fp, &polist);
 
-	fprintf(stderr, "nr was :%d\n", nr);
-
 	rc = verify_pushobj_list(nr, polist);
 
 	// cleanup
@@ -1466,6 +1461,9 @@ int str_to_polist(const char * buf, struct gidit_pushobj ***polist)
 		(*polist)[nr] = po;
 
 		nr++;
+
+		if (pt == '\0')
+			break;
 	}
 
 	return nr;

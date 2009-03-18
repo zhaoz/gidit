@@ -144,7 +144,7 @@ static int handle_po_message(struct set_po_message * message)
 	char * project_name = message->buf;
 	char * pgp_key = message->buf + ntohl(message->name_len);
 	char * push_obj = message->buf + ntohl(message->name_len) + ntohl(message->pgp_len);
-	struct gidit_pushobj * po = (struct gidit_pushobj*) malloc (sizeof(struct gidit_pushobj));
+	struct gidit_pushobj po = PO_INIT;
 	unsigned char sha1[20];
 	git_SHA_CTX c;
 
@@ -152,7 +152,8 @@ static int handle_po_message(struct set_po_message * message)
 	git_SHA1_Update(&c, pgp_key, ntohl(message->pgp_len));
 	git_SHA1_Final(sha1, &c);
 
-	str_to_pushobj(push_obj, po);
+	if (!str_to_pushobj(push_obj, &po))
+		die("Error reading pushobj");
 
 	if(!push_obj)
 		die("Error converting push object");
@@ -162,9 +163,9 @@ static int handle_po_message(struct set_po_message * message)
 	if(!pd)
 		die("Error creating project dir");
 
-	if(pushobj_add_to_list(pd, po))
+	if(pushobj_add_to_list(pd, &po))
 		die("Error adding push object");
-
+	
 	return 0;
 }
 
@@ -253,10 +254,12 @@ static void deliver_store_bundle(Key *k, Message *m)
 	struct bundle_message * msg = (struct bundle_message *)m->payload;
 	struct simple_ack ret_msg;
 
-	logerror("Received a call to store bundle");
+	logerror("Received a call to store bundle: %s", base_path);
 
-	ret_msg.status = gidit_store_bundle(msg->from, msg->to, base_path, ntohl(msg->bundle_len), msg->bundle);
+	ret_msg.status = gidit_store_bundle(base_path, msg->from, msg->to, ntohl(msg->bundle_len), msg->bundle);
 	ret_msg.pid = msg->pid;
+
+	logerror("store status: %d\n", ret_msg.status);
 
 	chimera_send(chimera_state, msg->source, RETURN_ACK, sizeof(ret_msg), (char*)&ret_msg);
 }
@@ -269,7 +272,7 @@ static void deliver_return_ack(Key *k, Message * m)
 
 	if (ntohl(msg->status))
 		kill(ntohl(msg->pid), SIGUSR2);
-	else
+	else	// success
 		kill(ntohl(msg->pid), SIGUSR1);
 
 }
@@ -286,6 +289,7 @@ static void dht_del (Key * k, Message * m)
 		case SET_PO:
 			if(handle_po_message((struct set_po_message *)m->payload))
 				die("Error handling set po");
+			break;
 		case STORE_BUNDLE:
 			deliver_store_bundle(k, m);
 			break;
@@ -423,16 +427,17 @@ static int dht_push_po(char *project_name, uint32_t pgp_len, char *pgp_key, stru
 	git_SHA1_Final(sha1, &c);
 	str_to_key(sha1_to_hex(sha1),&chimera_key);
 
-	strbuf_appendpushobj(&po_str, po, 0);
+	strbuf_appendpushobj(&po_str, po, 1);
 	length = sizeof(struct set_po_message) + strlen(project_name)+1 + pgp_len + po_str.len;
 	struct set_po_message * message = (struct set_po_message*) malloc (length);
+
 
 	message->name_len = htonl(strlen(project_name)+1);
 	message->po_len = htonl(po_str.len);
 	message->pgp_len = htonl(pgp_len);
 	memcpy(message->buf, project_name, strlen(project_name)+1);
-	memcpy(message->buf + strlen(project_name) + 1, po_str.buf, po_str.len);
-	memcpy(message->buf + strlen(project_name) + 1 + po_str.len, pgp_key, pgp_len);
+	memcpy(message->buf + strlen(project_name) + 1, pgp_key, pgp_len);
+	memcpy(message->buf + strlen(project_name) + 1 + pgp_len , po_str.buf, po_str.len);
 
 	chimera_send (chimera_state, chimera_key, SET_PO, length, (char*)message);
 
@@ -486,9 +491,9 @@ static int dht_send_bundle(struct gidit_pushobj * from,
 
 	memcpy(msg->bundle, bundle, bundle_len);
 
-	chimera_send (chimera_state, chimera_key, STORE_BUNDLE, sizeof(struct bundle_message) + bundle_len, (char*)msg);
-
 	push_returned = 0;
+
+	chimera_send (chimera_state, chimera_key, STORE_BUNDLE, sizeof(struct bundle_message) + bundle_len, (char*)msg);
 
 	while (!push_returned)
 		sleep(1);
@@ -594,23 +599,23 @@ static int execute(struct sockaddr *addr)
 				if (gidit_read_pushobj(fd, &po, 0))
 					die("Error reading push object");
 
+				if(dht_push_po(project_name.buf, pgp_len, pgp_key, &po))
+					die("Error sending push object");
+
 				safe_read(0, &bundle_len, sizeof(uint32_t));
 				bundle_len = ntohl(bundle_len);
 
 				unsigned char * bundle = (unsigned char*)xmalloc(bundle_len);	
 				safe_read(0, bundle, bundle_len);
 
-				if(dht_push_po( project_name.buf, pgp_len, pgp_key, &po))
-					die("Error sending push object");
-
 				// construct 
 				struct gidit_pushobj latest = PO_INIT;
 				int rc;
 
-				if (!str_to_pushobj(push_obj, &latest))
-					rc = dht_send_bundle(NULL, &po, bundle_len, bundle);
-				else 
+				if (push_obj && str_to_pushobj(push_obj, &latest))
 					rc = dht_send_bundle(&latest, &po, bundle_len, bundle);
+				else 
+					rc = dht_send_bundle(NULL, &po, bundle_len, bundle);
 
 				if (rc == 1)
 					client_ack(0, 0, "bundle saved");
